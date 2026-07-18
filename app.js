@@ -173,12 +173,21 @@ function mdToPlain(text) {
     return label ? `${label} ${url}` : url;
   });
 
-  text = text.replace(/\*\*\*(.+?)\*\*\*/g, '$1');
-  text = text.replace(/(^|[^\p{L}\p{N}])___([^\n]+?)___(?=$|[^\p{L}\p{N}])/gu, '$1$2');
-  text = text.replace(/\*\*(.+?)\*\*/g, '$1');
-  text = text.replace(/(^|[^\p{L}\p{N}])__([^\n]+?)__(?=$|[^\p{L}\p{N}])/gu, '$1$2');
-  text = text.replace(/\*([^*\n]+)\*/g, '$1');
-  text = text.replace(/(^|[^\p{L}\p{N}])_([^_\n]+?)_(?=$|[^\p{L}\p{N}])/gu, '$1$2');
+  text = text.replace(/(^|[^*])\*{3}([^*\s](?:[^\n]*?[^*\s])?)\*{3}(?!\*)/g, '$1$2');
+  text = text.replace(
+    /(^|[^\p{L}\p{N}_])___([^_\s](?:[^\n]*?[^_\s])?)___(?=$|[^\p{L}\p{N}_])/gu,
+    '$1$2'
+  );
+  text = text.replace(/(^|[^*])\*{2}([^*\s](?:[^\n]*?[^*\s])?)\*{2}(?!\*)/g, '$1$2');
+  text = text.replace(
+    /(^|[^\p{L}\p{N}_])__([^_\s](?:[^\n]*?[^_\s])?)__(?=$|[^\p{L}\p{N}_])/gu,
+    '$1$2'
+  );
+  text = text.replace(/(^|[^*])\*([^*\s](?:[^*\n]*?[^*\s])?)\*(?!\*)/g, '$1$2');
+  text = text.replace(
+    /(^|[^\p{L}\p{N}_])_([^_\s](?:[^_\n]*?[^_\s])?)_(?=$|[^\p{L}\p{N}_])/gu,
+    '$1$2'
+  );
   text = text.replace(/~~(.+?)~~/g, '$1');
   text = text.replace(/^[ \t]*#{1,6}\s+/gm, '');
   text = text.replace(/^\s*(>\s*)+/gm, '');

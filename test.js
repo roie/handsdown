@@ -124,6 +124,12 @@ test('preserves Markdown syntax inside indented code', () => {
   }
 });
 
+test('preserves emphasis markers with invalid whitespace boundaries', () => {
+  for (const source of ['a * b * c', 'a _ b _ c', 'a ** b ** c', 'a __ b __ c', 'a *** b *** c']) {
+    assert.equal(mdToPlain(source), source);
+  }
+});
+
 test('protects tilde fenced code', () => {
   assert.equal(mdToPlain('~~~js\n**bold**\n~~~'), '**bold**');
 });
