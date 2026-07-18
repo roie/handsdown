@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { mdToPlain, copyText, createUpdateScheduler } = require('./app.js');
+const { mdToPlain, copyText, createUpdateScheduler, createCopyCoordinator } = require('./app.js');
 
 test('exports the production Markdown converter', () => {
   assert.equal(typeof mdToPlain, 'function');
@@ -217,6 +217,28 @@ test('reports failure when fallback throws', async () => {
     fallbackCopy: () => { throw new Error('blocked'); }
   });
   assert.equal(copied, false);
+});
+
+test('copy coordinator ignores stale and invalidated outcomes', async () => {
+  const outcomes = [];
+  const coordinator = createCopyCoordinator(outcome => outcomes.push(outcome));
+  let resolveFirst;
+  let resolveSecond;
+  let resolveCleared;
+
+  const first = coordinator.run(() => new Promise(resolve => { resolveFirst = resolve; }));
+  const second = coordinator.run(() => new Promise(resolve => { resolveSecond = resolve; }));
+  resolveSecond(true);
+  await second;
+  resolveFirst(false);
+  await first;
+  assert.deepEqual(outcomes, [true]);
+
+  const cleared = coordinator.run(() => new Promise(resolve => { resolveCleared = resolve; }));
+  coordinator.invalidate();
+  resolveCleared(false);
+  await cleared;
+  assert.deepEqual(outcomes, [true]);
 });
 
 test('scheduler replaces stale pending conversions', () => {

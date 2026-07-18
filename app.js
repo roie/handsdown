@@ -257,6 +257,22 @@ async function copyText({ text, clipboard, fallbackCopy }) {
   }
 }
 
+function createCopyCoordinator(onResult) {
+  let latestAttempt = 0;
+
+  return {
+    async run(operation) {
+      const attempt = ++latestAttempt;
+      const result = await operation();
+      if (attempt === latestAttempt) onResult(result);
+      return result;
+    },
+    invalidate() {
+      latestAttempt += 1;
+    }
+  };
+}
+
 function createUpdateScheduler({ delay, compute, render, setTimer = setTimeout, clearTimer = clearTimeout }) {
   let timer = null;
   let latest = '';
@@ -403,24 +419,28 @@ function initApp(documentRef, windowRef) {
     copyResetTimer = windowRef.setTimeout(resetCopyFeedback, 1500);
   }
 
+  const copyCoordinator = createCopyCoordinator(showCopyFeedback);
+
   async function copyOutput() {
     scheduler.schedule(input.value);
     scheduler.flush();
     if (!output.value) return;
 
-    const succeeded = await copyText({
-      text: output.value,
-      clipboard: windowRef.navigator.clipboard,
-      fallbackCopy: () => {
-        output.select();
-        if (typeof documentRef.execCommand !== 'function') return false;
-        return documentRef.execCommand('copy');
-      }
-    });
-    showCopyFeedback(succeeded);
+    await copyCoordinator.run(() =>
+      copyText({
+        text: output.value,
+        clipboard: windowRef.navigator.clipboard,
+        fallbackCopy: () => {
+          output.select();
+          if (typeof documentRef.execCommand !== 'function') return false;
+          return documentRef.execCommand('copy');
+        }
+      })
+    );
   }
 
   function clearAll() {
+    copyCoordinator.invalidate();
     input.value = '';
     output.value = '';
     resetCopyFeedback();
@@ -455,7 +475,14 @@ function initApp(documentRef, windowRef) {
   scheduler.flush();
 }
 
-const api = { mdToPlain, cleanUrl, createUniquePrefix, copyText, createUpdateScheduler };
+const api = {
+  mdToPlain,
+  cleanUrl,
+  createUniquePrefix,
+  copyText,
+  createCopyCoordinator,
+  createUpdateScheduler
+};
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = api;
