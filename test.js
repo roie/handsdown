@@ -215,3 +215,4 @@ test('scheduler flushes the latest conversion synchronously', () => {
   assert.deepEqual(rendered, ['copy now!']);
   assert.equal(queued.size, 0);
 });
+
