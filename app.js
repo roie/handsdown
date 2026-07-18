@@ -30,12 +30,13 @@ function createProtector(text) {
 }
 
 function protectFencedCode(text, protector) {
-  const lines = text.split('\n');
+  const lineBreak = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text.split(/\r?\n/);
   const output = [];
   let fence = null;
 
   function saveFence(hasFollowingContent) {
-    const content = fence.lines.join('\n');
+    const content = fence.lines.join(lineBreak);
     if (output.length > 0 && output.at(-1) !== '') output.push('');
     output.push(protector.save('CB', content));
     if (hasFollowingContent) output.push('');
@@ -293,6 +294,10 @@ function createUpdateScheduler({ delay, compute, render, setTimer = setTimeout, 
   };
 }
 
+function formatCount(number, singular) {
+  return `${number.toLocaleString()} ${number === 1 ? singular : `${singular}s`}`;
+}
+
 function initApp(documentRef, windowRef) {
   const input = documentRef.getElementById('input');
   const output = documentRef.getElementById('output');
@@ -362,10 +367,6 @@ function initApp(documentRef, windowRef) {
     updateThemeIcon();
   }
 
-  function formatNum(number) {
-    return number.toLocaleString();
-  }
-
   function renderUpdate({ raw, plain }) {
     if (output.value !== plain) output.value = plain;
 
@@ -375,11 +376,11 @@ function initApp(documentRef, windowRef) {
     const saved = Math.max(0, rawSaved);
     const diff = Math.max(0, inLen - outLen);
 
-    inputChars.textContent = inLen ? `${formatNum(inLen)} chars` : '';
-    outputChars.textContent = outLen || inLen ? `${formatNum(outLen)} chars` : '';
+    inputChars.textContent = inLen ? formatCount(inLen, 'char') : '';
+    outputChars.textContent = outLen || inLen ? formatCount(outLen, 'char') : '';
     let savingsText = '';
     if (inLen > 0) {
-      savingsText = diff === 0 ? 'No change' : `${saved}% smaller · ${formatNum(diff)} chars removed`;
+      savingsText = diff === 0 ? 'No change' : `${saved}% smaller · ${formatCount(diff, 'char')} removed`;
     }
     savedEl.textContent = savingsText;
     copyBtn.disabled = !outLen;
@@ -481,7 +482,8 @@ const api = {
   createUniquePrefix,
   copyText,
   createCopyCoordinator,
-  createUpdateScheduler
+  createUpdateScheduler,
+  formatCount
 };
 
 if (typeof module !== 'undefined' && module.exports) {

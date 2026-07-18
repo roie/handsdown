@@ -1,7 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { mdToPlain, copyText, createUpdateScheduler, createCopyCoordinator } = require('./app.js');
+const {
+  mdToPlain,
+  copyText,
+  createUpdateScheduler,
+  createCopyCoordinator,
+  formatCount
+} = require('./app.js');
 
 test('exports the production Markdown converter', () => {
   assert.equal(typeof mdToPlain, 'function');
@@ -134,6 +140,11 @@ test('protects tilde fenced code', () => {
   assert.equal(mdToPlain('~~~js\n**bold**\n~~~'), '**bold**');
 });
 
+test('recognizes CRLF fenced code and preserves its internal line endings', () => {
+  assert.equal(mdToPlain('```js\r\na\r\nb\r\n```'), 'a\r\nb');
+  assert.equal(mdToPlain('~~~\r\n# heading\r\n~~~'), '# heading');
+});
+
 test('requires a closing fence at least as long as the opener', () => {
   assert.equal(mdToPlain('````\na ``` b\n````'), 'a ``` b');
 });
@@ -201,6 +212,20 @@ test('uses clipboard API when it succeeds', async () => {
   assert.equal(fallbackCalled, false);
 });
 
+test('uses a successful fallback when clipboard is unavailable', async () => {
+  let fallbackCalls = 0;
+  const copied = await copyText({
+    text: 'plain',
+    clipboard: null,
+    fallbackCopy: () => {
+      fallbackCalls += 1;
+      return true;
+    }
+  });
+  assert.equal(copied, true);
+  assert.equal(fallbackCalls, 1);
+});
+
 test('reports failure when clipboard rejects and fallback returns false', async () => {
   const copied = await copyText({
     text: 'plain',
@@ -239,6 +264,11 @@ test('copy coordinator ignores stale and invalidated outcomes', async () => {
   resolveCleared(false);
   await cleared;
   assert.deepEqual(outcomes, [true]);
+});
+
+test('formats singular and plural character counts', () => {
+  assert.equal(formatCount(1, 'char'), '1 char');
+  assert.equal(formatCount(2, 'char'), '2 chars');
 });
 
 test('scheduler replaces stale pending conversions', () => {
