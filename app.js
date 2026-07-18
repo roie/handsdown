@@ -324,7 +324,11 @@ function initApp(documentRef, windowRef) {
 
     inputChars.textContent = inLen ? `${formatNum(inLen)} chars` : '';
     outputChars.textContent = outLen || inLen ? `${formatNum(outLen)} chars` : '';
-    savedEl.textContent = !inLen ? '' : diff === 0 ? 'No change' : `${saved}% smaller · ${formatNum(diff)} chars removed`;
+    let savingsText = '';
+    if (inLen > 0) {
+      savingsText = diff === 0 ? 'No change' : `${saved}% smaller · ${formatNum(diff)} chars removed`;
+    }
+    savedEl.textContent = savingsText;
     copyBtn.disabled = !outLen;
     clearBtn.disabled = !inLen && !outLen;
   }
