@@ -118,6 +118,12 @@ test('preserves underscores inside identifiers', () => {
   assert.equal(mdToPlain('snake_case_name'), 'snake_case_name');
 });
 
+test('preserves Markdown syntax inside indented code', () => {
+  for (const source of ['    # keep', '    > keep', '    - keep', '    ---', '    *literal*', '\t__value__']) {
+    assert.equal(mdToPlain(source), source);
+  }
+});
+
 test('protects tilde fenced code', () => {
   assert.equal(mdToPlain('~~~js\n**bold**\n~~~'), '**bold**');
 });

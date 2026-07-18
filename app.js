@@ -68,6 +68,13 @@ function protectFencedCode(text, protector) {
   return output.join('\n');
 }
 
+function protectIndentedCode(text, protector) {
+  return text
+    .split('\n')
+    .map(line => (/^( {4,}|\t)/.test(line) ? protector.save('ID', line) : line))
+    .join('\n');
+}
+
 function protectInlineCode(text, protector) {
   let result = '';
   let cursor = 0;
@@ -147,6 +154,7 @@ function mdToPlain(text) {
   const markdownDestination = String.raw`\(\s*([^\s)]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)`;
 
   text = protectFencedCode(text, protector);
+  text = protectIndentedCode(text, protector);
   text = protectInlineCode(text, protector);
   text = text.replace(/<((?:https?:\/\/|mailto:|tel:)[^>\s]+)>/gi, '$1');
   text = text.replace(/\\([\\`*_{}[\]()#+\-.!])/g, '$1');
@@ -199,6 +207,7 @@ function mdToPlain(text) {
     .replace(/\n+$/, '');
 
   text = protector.restore(text, 'IC');
+  text = protector.restore(text, 'ID');
   text = protector.restore(text, 'CB');
   return text.replace(/^\n+/, '').replace(/\n+$/, '');
 }
