@@ -24,19 +24,48 @@ function createProtector(text) {
       return token;
     },
     restore(value) {
-      return value.replace(tokenPattern, token => replacements.get(token) ?? token);
+      for (let pass = 0; pass < 3; pass += 1) {
+        const restored = value.replace(tokenPattern, token => replacements.get(token) ?? token);
+        if (restored === value) return value;
+        value = restored;
+      }
+      return value;
     }
   };
 }
 
+function splitLinesWithEndings(text) {
+  const lines = [];
+  let start = 0;
+
+  while (start < text.length) {
+    const newline = text.indexOf('\n', start);
+    if (newline === -1) {
+      lines.push({ text: text.slice(start), ending: '' });
+      return lines;
+    }
+
+    const hasCarriageReturn = newline > start && text[newline - 1] === '\r';
+    lines.push({
+      text: text.slice(start, hasCarriageReturn ? newline - 1 : newline),
+      ending: hasCarriageReturn ? '\r\n' : '\n'
+    });
+    start = newline + 1;
+  }
+
+  lines.push({ text: '', ending: '' });
+  return lines;
+}
+
 function protectFencedCode(text, protector) {
-  const lineBreak = text.includes('\r\n') ? '\r\n' : '\n';
-  const lines = text.split(/\r?\n/);
+  const lines = splitLinesWithEndings(text);
   const output = [];
   let fence = null;
 
   function saveFence(hasFollowingContent) {
-    const content = fence.lines.join(lineBreak);
+    const content = fence.lines
+      .map((line, index) => line.text + (index < fence.lines.length - 1 ? line.ending : ''))
+      .join('');
     if (output.length > 0 && output.at(-1) !== '') output.push('');
     output.push(protector.save('CB', content));
     if (hasFollowingContent) output.push('');
@@ -47,18 +76,19 @@ function protectFencedCode(text, protector) {
     const line = lines[index];
 
     if (!fence) {
-      const opening = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
-      if (opening) {
+      const opening = line.text.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      const isOrphanClosingFence = opening && index === lines.length - 1 && opening[2].trim() === '';
+      if (opening && !isOrphanClosingFence) {
         fence = { character: opening[1][0], length: opening[1].length, lines: [] };
       } else {
-        output.push(line);
+        output.push(line.text);
       }
       continue;
     }
 
-    const closing = line.match(/^ {0,3}(`+|~+)[ \t]*$/);
+    const closing = line.text.match(/^ {0,3}(`+|~+)[ \t]*$/);
     if (closing && closing[1][0] === fence.character && closing[1].length >= fence.length) {
-      saveFence(index + 1 < lines.length && lines[index + 1] !== '');
+      saveFence(index + 1 < lines.length && lines[index + 1].text !== '');
     } else {
       fence.lines.push(line);
     }
@@ -69,13 +99,41 @@ function protectFencedCode(text, protector) {
 }
 
 function protectIndentedCode(text, protector) {
-  return text
-    .split('\n')
-    .map(line => (/^( {4,}|\t)/.test(line) ? protector.save('ID', line) : line))
-    .join('\n');
+  const lines = text.split('\n');
+  const output = [];
+  const isIndented = line => /^( {4,}|\t)/.test(line);
+
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!isIndented(lines[index])) {
+      output.push(lines[index]);
+      continue;
+    }
+
+    const block = [lines[index]];
+    let next = index + 1;
+    while (next < lines.length) {
+      if (isIndented(lines[next])) {
+        block.push(lines[next]);
+        next += 1;
+        continue;
+      }
+
+      if (lines[next] !== '') break;
+      let afterBlanks = next;
+      while (afterBlanks < lines.length && lines[afterBlanks] === '') afterBlanks += 1;
+      if (afterBlanks >= lines.length || !isIndented(lines[afterBlanks])) break;
+      block.push(...lines.slice(next, afterBlanks));
+      next = afterBlanks;
+    }
+
+    output.push(protector.save('ID', block.join('\n')));
+    index = next - 1;
+  }
+
+  return output.join('\n');
 }
 
-function protectInlineCode(text, protector, blockFenceAware = false) {
+function protectInlineCode(text, protector) {
   let result = '';
   let cursor = 0;
 
@@ -88,18 +146,6 @@ function protectInlineCode(text, protector, blockFenceAware = false) {
     while (text[openingIndex + runLength] === '`') runLength += 1;
 
     const delimiter = '`'.repeat(runLength);
-    if (blockFenceAware) {
-      const lineStart = text.lastIndexOf('\n', openingIndex - 1) + 1;
-      const linePrefix = text.slice(lineStart, openingIndex);
-      const isBlockFence = runLength >= 3 && /^ {0,3}$/.test(linePrefix);
-      const isIndentedCode = /^( {4,}|\t)/.test(linePrefix);
-      if (runLength < 3 || isBlockFence || isIndentedCode) {
-        result += delimiter;
-        cursor = openingIndex + runLength;
-        continue;
-      }
-    }
-
     let closingIndex = text.indexOf(delimiter, openingIndex + runLength);
     while (
       closingIndex !== -1 &&
@@ -168,13 +214,72 @@ function replaceHtmlAnchors(text) {
   return result;
 }
 
+function delimiterFlanking(text, index, length, marker) {
+  const previous = text[index - 1];
+  const next = text[index + length];
+  const isWhitespace = character => character === undefined || /\s/u.test(character);
+  const isPunctuation = character => character !== undefined && /[\p{P}\p{S}]/u.test(character);
+  const previousWhitespace = isWhitespace(previous);
+  const nextWhitespace = isWhitespace(next);
+  const previousPunctuation = isPunctuation(previous);
+  const nextPunctuation = isPunctuation(next);
+  const leftFlanking = !nextWhitespace && (!nextPunctuation || previousWhitespace || previousPunctuation);
+  const rightFlanking = !previousWhitespace && (!previousPunctuation || nextWhitespace || nextPunctuation);
+
+  if (marker === '_') {
+    return {
+      canOpen: leftFlanking && (!rightFlanking || previousPunctuation),
+      canClose: rightFlanking && (!leftFlanking || nextPunctuation)
+    };
+  }
+
+  return { canOpen: leftFlanking, canClose: rightFlanking };
+}
+
+function stripEmphasis(text, marker, length) {
+  const delimiter = marker.repeat(length);
+  const removals = new Set();
+  let opener = null;
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    const index = text.indexOf(delimiter, cursor);
+    if (index === -1) break;
+    cursor = index + length;
+
+    if (text[index - 1] === marker || text[index + length] === marker) continue;
+    const flanking = delimiterFlanking(text, index, length, marker);
+
+    if (opener !== null && text.slice(opener + length, index).includes('\n')) opener = null;
+    if (opener !== null && flanking.canClose) {
+      removals.add(opener);
+      removals.add(index);
+      opener = null;
+    } else if (flanking.canOpen) {
+      opener = index;
+    }
+  }
+
+  if (removals.size === 0) return text;
+  const output = [];
+  cursor = 0;
+  while (cursor < text.length) {
+    if (removals.has(cursor)) {
+      cursor += length;
+    } else {
+      output.push(text[cursor]);
+      cursor += 1;
+    }
+  }
+  return output.join('');
+}
+
 function mdToPlain(text) {
   if (!text) return '';
 
   const protector = createProtector(text);
   const markdownDestination = String.raw`\(\s*([^\s)]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)`;
 
-  text = protectInlineCode(text, protector, true);
   text = protectFencedCode(text, protector);
   text = protectIndentedCode(text, protector);
   text = protectInlineCode(text, protector);
@@ -195,21 +300,12 @@ function mdToPlain(text) {
     return label ? `${label} ${url}` : url;
   });
 
-  text = text.replace(/(^|[^*])\*{3}([^*\s](?:[^\n]*?[^*\s])?)\*{3}(?!\*)/g, '$1$2');
-  text = text.replace(
-    /(^|[^\p{L}\p{N}_])___([^_\s](?:[^\n]*?[^_\s])?)___(?=$|[^\p{L}\p{N}_])/gu,
-    '$1$2'
-  );
-  text = text.replace(/(^|[^*])\*{2}([^*\s](?:[^\n]*?[^*\s])?)\*{2}(?!\*)/g, '$1$2');
-  text = text.replace(
-    /(^|[^\p{L}\p{N}_])__([^_\s](?:[^\n]*?[^_\s])?)__(?=$|[^\p{L}\p{N}_])/gu,
-    '$1$2'
-  );
-  text = text.replace(/(^|[^*])\*([^*\s](?:[^*\n]*?[^*\s])?)\*(?!\*)/g, '$1$2');
-  text = text.replace(
-    /(^|[^\p{L}\p{N}_])_([^_\s](?:[^_\n]*?[^_\s])?)_(?=$|[^\p{L}\p{N}_])/gu,
-    '$1$2'
-  );
+  text = stripEmphasis(text, '*', 3);
+  text = stripEmphasis(text, '_', 3);
+  text = stripEmphasis(text, '*', 2);
+  text = stripEmphasis(text, '_', 2);
+  text = stripEmphasis(text, '*', 1);
+  text = stripEmphasis(text, '_', 1);
   text = text.replace(/~~(.+?)~~/g, '$1');
   text = text.replace(/^[ \t]*#{1,6}\s+/gm, '');
   text = text.replace(/^\s*(>\s*)+/gm, '');

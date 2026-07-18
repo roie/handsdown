@@ -130,10 +130,22 @@ test('preserves Markdown syntax inside indented code', () => {
   }
 });
 
+test('preserves consecutive blank lines inside indented code blocks', () => {
+  const source = '    a\n\n\n    b';
+  assert.equal(mdToPlain(source), source);
+});
+
 test('preserves emphasis markers with invalid whitespace boundaries', () => {
   for (const source of ['a * b * c', 'a _ b _ c', 'a ** b ** c', 'a __ b __ c', 'a *** b *** c']) {
     assert.equal(mdToPlain(source), source);
   }
+});
+
+test('respects punctuation flanking rules for asterisk emphasis', () => {
+  assert.equal(mdToPlain('a*"foo"*'), 'a*"foo"*');
+  assert.equal(mdToPlain('*"foo"*a'), '*"foo"*a');
+  assert.equal(mdToPlain('a *"foo"*'), 'a "foo"');
+  assert.equal(mdToPlain('*"foo"* a'), '"foo" a');
 });
 
 test('protects tilde fenced code', () => {
@@ -145,8 +157,17 @@ test('recognizes CRLF fenced code and preserves its internal line endings', () =
   assert.equal(mdToPlain('~~~\r\n# heading\r\n~~~'), '# heading');
 });
 
+test('preserves mixed line endings inside fenced code', () => {
+  assert.equal(mdToPlain('```\r\na\r\nb\nc\r\n```'), 'a\r\nb\nc');
+});
+
 test('requires a closing fence at least as long as the opener', () => {
   assert.equal(mdToPlain('````\na ``` b\n````'), 'a ``` b');
+});
+
+test('restores shorter backtick runs nested inside fenced code', () => {
+  assert.equal(mdToPlain('````\na ```x``` b\n````'), 'a ```x``` b');
+  assert.equal(mdToPlain('~~~\na ```x``` b\n~~~'), 'a ```x``` b');
 });
 
 test('does not collide with protection-like user text', () => {
@@ -177,11 +198,27 @@ test('handles repeated unclosed anchors without quadratic slowdown', { timeout: 
   assert.ok(performance.now() - started < 1000);
 });
 
-test('restores many inline-code tokens without quadratic slowdown', { timeout: 2000 }, () => {
-  const source = Array(8_000).fill('`x`').join(' ');
-  const started = performance.now();
-  mdToPlain(source);
-  assert.ok(performance.now() - started < 250);
+test('restores inline-code tokens with near-linear growth', { timeout: 2000 }, () => {
+  const measure = count => {
+    const source = Array(count).fill('`x`').join(' ');
+    const cpuTimes = [];
+    let output;
+    mdToPlain(source);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const started = process.cpuUsage();
+      output = mdToPlain(source);
+      const elapsed = process.cpuUsage(started);
+      cpuTimes.push((elapsed.user + elapsed.system) / 1000);
+    }
+    return { cpuTime: Math.min(...cpuTimes), output };
+  };
+
+  const small = measure(8_000);
+  const large = measure(16_000);
+  assert.equal(small.output, Array(8_000).fill('x').join(' '));
+  assert.equal(large.output, Array(16_000).fill('x').join(' '));
+  assert.ok(large.cpuTime < small.cpuTime * 3 + 30);
+  assert.ok(large.cpuTime < 500);
 });
 
 test('handles repeated no-href anchors without quadratic slowdown', { timeout: 2000 }, () => {
@@ -312,4 +349,3 @@ test('scheduler flushes the latest conversion synchronously', () => {
   assert.deepEqual(rendered, ['copy now!']);
   assert.equal(queued.size, 0);
 });
-
