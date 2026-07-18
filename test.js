@@ -113,3 +113,31 @@ test('converts the documented Markdown subset', async t => {
     });
   }
 });
+
+test('preserves underscores inside identifiers', () => {
+  assert.equal(mdToPlain('snake_case_name'), 'snake_case_name');
+});
+
+test('protects tilde fenced code', () => {
+  assert.equal(mdToPlain('~~~js\n**bold**\n~~~'), '**bold**');
+});
+
+test('requires a closing fence at least as long as the opener', () => {
+  assert.equal(mdToPlain('````\na ``` b\n````'), 'a ``` b');
+});
+
+test('does not collide with protection-like user text', () => {
+  const source = '§§HANDSDOWNCB0§§\n```\ncode\n```';
+  assert.equal(mdToPlain(source), '§§HANDSDOWNCB0§§\n\ncode');
+});
+
+test('preserves tel autolinks without the scheme', () => {
+  assert.equal(mdToPlain('<tel:+14155551234>'), '+14155551234');
+});
+
+test('handles repeated unclosed anchors without quadratic slowdown', { timeout: 2000 }, () => {
+  const source = '<a href="https://example.com">'.repeat(20_000);
+  const started = performance.now();
+  mdToPlain(source);
+  assert.ok(performance.now() - started < 1000);
+});

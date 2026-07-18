@@ -8,21 +8,96 @@ function createUniquePrefix(text) {
   return prefix;
 }
 
-// regex capture group at contentIndex must contain protected content
-function protect(text, regex, store, prefix, transform = value => value, contentIndex = 1) {
-  return text.replace(regex, (...args) => {
-    const content = transform(args[contentIndex]);
-    const id = `§§HANDSDOWN${prefix}${store.length}§§`;
-    store.push(content);
-    return id;
-  });
+function createProtector(text) {
+  const prefix = createUniquePrefix(text);
+  const stores = new Map();
+
+  return {
+    save(kind, content) {
+      const values = stores.get(kind) || [];
+      const token = `${prefix}${kind}${values.length}§§`;
+      values.push(content);
+      stores.set(kind, values);
+      return token;
+    },
+    restore(value, kind) {
+      const values = stores.get(kind) || [];
+      for (let index = 0; index < values.length; index += 1) {
+        value = value.replaceAll(`${prefix}${kind}${index}§§`, values[index]);
+      }
+      return value;
+    }
+  };
 }
 
-function restore(text, store, prefix) {
-  store.forEach((content, index) => {
-    text = text.replaceAll(`§§HANDSDOWN${prefix}${index}§§`, content);
-  });
-  return text;
+function protectFencedCode(text, protector) {
+  const lines = text.split('\n');
+  const output = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const opening = lines[index].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (!opening) {
+      output.push(lines[index]);
+      continue;
+    }
+
+    const fenceCharacter = opening[1][0];
+    const fenceLength = opening[1].length;
+    let closingIndex = -1;
+
+    for (let candidate = index + 1; candidate < lines.length; candidate += 1) {
+      const closing = lines[candidate].match(/^ {0,3}(`+|~+)[ \t]*$/);
+      if (closing && closing[1][0] === fenceCharacter && closing[1].length >= fenceLength) {
+        closingIndex = candidate;
+        break;
+      }
+    }
+
+    if (closingIndex === -1) {
+      output.push(lines[index]);
+      continue;
+    }
+
+    const content = lines.slice(index + 1, closingIndex).join('\n');
+    if (output.length > 0 && output.at(-1) !== '') output.push('');
+    output.push(protector.save('CB', content));
+    if (closingIndex + 1 < lines.length && lines[closingIndex + 1] !== '') output.push('');
+    index = closingIndex;
+  }
+
+  return output.join('\n');
+}
+
+function protectInlineCode(text, protector) {
+  let result = '';
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    const openingIndex = text.indexOf('`', cursor);
+    if (openingIndex === -1) return result + text.slice(cursor);
+
+    result += text.slice(cursor, openingIndex);
+    let runLength = 1;
+    while (text[openingIndex + runLength] === '`') runLength += 1;
+
+    const delimiter = '`'.repeat(runLength);
+    let closingIndex = text.indexOf(delimiter, openingIndex + runLength);
+    while (
+      closingIndex !== -1 &&
+      (text[closingIndex - 1] === '`' || text[closingIndex + runLength] === '`')
+    ) {
+      closingIndex = text.indexOf(delimiter, closingIndex + runLength);
+    }
+
+    if (closingIndex === -1) return result + text.slice(openingIndex);
+
+    const content = text.slice(openingIndex + runLength, closingIndex);
+    if (content.startsWith('\n')) result = result.replace(/[ \t]+$/, '');
+    result += protector.save('IC', content);
+    cursor = closingIndex + runLength;
+  }
+
+  return result;
 }
 
 function cleanUrl(url) {
@@ -32,39 +107,50 @@ function cleanUrl(url) {
     .replace(/^www\./i, '');
 }
 
+function replaceHtmlAnchors(text) {
+  const lowerText = text.toLowerCase();
+  let result = '';
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    const openingIndex = lowerText.indexOf('<a ', cursor);
+    if (openingIndex === -1) return result + text.slice(cursor);
+
+    result += text.slice(cursor, openingIndex);
+    const tagEnd = text.indexOf('>', openingIndex + 3);
+    if (tagEnd === -1) return result + text.slice(openingIndex);
+
+    const closingIndex = lowerText.indexOf('</a>', tagEnd + 1);
+    if (closingIndex === -1) return result + text.slice(openingIndex);
+
+    const openingTag = text.slice(openingIndex, tagEnd + 1);
+    const hrefMatch = openingTag.match(/\bhref=["']([^"']+)["']/i);
+    if (!hrefMatch) {
+      result += openingTag;
+      cursor = tagEnd + 1;
+      continue;
+    }
+
+    const label = text.slice(tagEnd + 1, closingIndex).replace(/<\/?[a-z][^>\n]*>/g, '').trim();
+    const url = cleanUrl(hrefMatch[1]);
+    result += label ? `${label} ${url}` : url;
+    cursor = closingIndex + 4;
+  }
+
+  return result;
+}
+
 function mdToPlain(text) {
   if (!text) return '';
 
-  const codeBlocks = [];
-  const inlineCodes = [];
+  const protector = createProtector(text);
   const markdownDestination = String.raw`\(\s*([^\s)]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)`;
 
-  text = protect(
-    text,
-    /```+[^\n]*\n?([\s\S]*?)```+[ \t]*/g,
-    codeBlocks,
-    'CB',
-    code => `\n${code.trimEnd()}\n`
-  );
-
-  text = protect(
-    text,
-    /(`+)([\s\S]*?)\1/g,
-    inlineCodes,
-    'IC',
-    value => value,
-    2
-  );
-
-  text = text.replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/gi, '$1');
+  text = protectFencedCode(text, protector);
+  text = protectInlineCode(text, protector);
+  text = text.replace(/<((?:https?:\/\/|mailto:|tel:)[^>\s]+)>/gi, '$1');
   text = text.replace(/\\([\\`*_{}[\]()#+\-.!])/g, '$1');
-
-  text = text.replace(/<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_, href, label) => {
-    href = cleanUrl(href);
-    label = label.replace(/<\/?[a-z][^>\n]*>/g, '').trim();
-    return label ? `${label} ${href}` : href;
-  });
-
+  text = replaceHtmlAnchors(text);
   text = text.replace(/<\/?[a-z][^>\n]*>/g, '');
 
   text = text.replace(new RegExp(String.raw`!\[([^\]]*)\]${markdownDestination}`, 'g'), (_, alt, url) => {
@@ -80,11 +166,11 @@ function mdToPlain(text) {
   });
 
   text = text.replace(/\*\*\*(.+?)\*\*\*/g, '$1');
-  text = text.replace(/___(.+?)___/g, '$1');
+  text = text.replace(/(^|[^\p{L}\p{N}])___([^\n]+?)___(?=$|[^\p{L}\p{N}])/gu, '$1$2');
   text = text.replace(/\*\*(.+?)\*\*/g, '$1');
-  text = text.replace(/__(.+?)__/g, '$1');
+  text = text.replace(/(^|[^\p{L}\p{N}])__([^\n]+?)__(?=$|[^\p{L}\p{N}])/gu, '$1$2');
   text = text.replace(/\*([^*\n]+)\*/g, '$1');
-  text = text.replace(/_([^_\n]+)_/g, '$1');
+  text = text.replace(/(^|[^\p{L}\p{N}])_([^_\n]+?)_(?=$|[^\p{L}\p{N}])/gu, '$1$2');
   text = text.replace(/~~(.+?)~~/g, '$1');
   text = text.replace(/^[ \t]*#{1,6}\s+/gm, '');
   text = text.replace(/^\s*(>\s*)+/gm, '');
@@ -98,21 +184,23 @@ function mdToPlain(text) {
   text = text.replace(/(^|\s)mailto:/gi, '$1');
   text = text.replace(/(^|\s)tel:/gi, '$1');
 
-  text = text.split('\n').map(line => {
-    if (/^( {4,}|\t)/.test(line)) return line;
-    return line.trim().replace(/ {2,}/g, ' ');
-  }).join('\n');
+  text = text
+    .split('\n')
+    .map(line => {
+      if (/^( {4,}|\t)/.test(line)) return line;
+      return line.trim().replace(/ {2,}/g, ' ');
+    })
+    .join('\n');
 
-  text = text.replace(/\n{3,}/g, '\n\n');
-  text = text.replace(/^\n+/, '').trimEnd();
-  text = restore(text, inlineCodes, 'IC');
-  text = restore(text, codeBlocks, 'CB');
-
-  return text
+  text = text
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .replace(/^\n+/, '')
     .replace(/\n+$/, '');
+
+  text = protector.restore(text, 'IC');
+  text = protector.restore(text, 'CB');
+  return text.replace(/^\n+/, '').replace(/\n+$/, '');
 }
 
 function initApp(documentRef, windowRef) {
