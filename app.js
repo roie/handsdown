@@ -203,6 +203,43 @@ function mdToPlain(text) {
   return text.replace(/^\n+/, '').replace(/\n+$/, '');
 }
 
+async function copyText({ text, clipboard, fallbackCopy }) {
+  if (!text) return false;
+
+  if (clipboard && typeof clipboard.writeText === 'function') {
+    try {
+      await clipboard.writeText(text);
+      return true;
+    } catch {}
+  }
+
+  try {
+    return fallbackCopy() === true;
+  } catch {
+    return false;
+  }
+}
+
+function createUpdateScheduler({ delay, compute, render, setTimer = setTimeout, clearTimer = clearTimeout }) {
+  let timer = null;
+  let latest = '';
+
+  const flush = () => {
+    if (timer !== null) clearTimer(timer);
+    timer = null;
+    render(compute(latest));
+  };
+
+  return {
+    schedule(value) {
+      latest = value;
+      if (timer !== null) clearTimer(timer);
+      timer = setTimer(flush, delay);
+    },
+    flush
+  };
+}
+
 function initApp(documentRef, windowRef) {
   const input = documentRef.getElementById('input');
   const output = documentRef.getElementById('output');
@@ -212,6 +249,7 @@ function initApp(documentRef, windowRef) {
   const copyBtn = documentRef.getElementById('copy');
   const clearBtn = documentRef.getElementById('clear');
   const themeBtn = documentRef.getElementById('theme');
+  const copyStatus = documentRef.getElementById('copyStatus');
 
   const svgNamespace = 'http://www.w3.org/2000/svg';
 
@@ -274,10 +312,7 @@ function initApp(documentRef, windowRef) {
     return number.toLocaleString();
   }
 
-  function update() {
-    const raw = input.value;
-    const plain = mdToPlain(raw);
-
+  function renderUpdate({ raw, plain }) {
     if (output.value !== plain) output.value = plain;
 
     const inLen = raw.length;
@@ -293,40 +328,62 @@ function initApp(documentRef, windowRef) {
     clearBtn.disabled = !inLen && !outLen;
   }
 
-  function copyOutput() {
+  const scheduler = createUpdateScheduler({
+    delay: 50,
+    compute: raw => ({ raw, plain: mdToPlain(raw) }),
+    render: renderUpdate,
+    setTimer: windowRef.setTimeout.bind(windowRef),
+    clearTimer: windowRef.clearTimeout.bind(windowRef)
+  });
+
+  let copyResetTimer = null;
+
+  function resetCopyFeedback() {
+    if (copyResetTimer !== null) windowRef.clearTimeout(copyResetTimer);
+    copyResetTimer = null;
+    copyBtn.textContent = 'Copy';
+    copyBtn.classList.remove('copied', 'failed');
+  }
+
+  function showCopyFeedback(succeeded) {
+    resetCopyFeedback();
+    copyBtn.textContent = succeeded ? 'Copied!' : 'Copy failed';
+    copyBtn.classList.add(succeeded ? 'copied' : 'failed');
+    if (copyStatus) {
+      copyStatus.textContent = succeeded
+        ? 'Copied to clipboard.'
+        : 'Copy failed. Select the plain text and copy it manually.';
+    }
+    copyResetTimer = windowRef.setTimeout(resetCopyFeedback, 1500);
+  }
+
+  async function copyOutput() {
+    scheduler.schedule(input.value);
+    scheduler.flush();
     if (!output.value) return;
 
-    const markCopied = () => {
-      copyBtn.textContent = 'Copied!';
-      copyBtn.classList.add('copied');
-      windowRef.setTimeout(() => {
-        copyBtn.textContent = 'Copy';
-        copyBtn.classList.remove('copied');
-      }, 1500);
-    };
-
-    const fallbackCopy = () => {
-      output.select();
-      documentRef.execCommand('copy');
-      markCopied();
-    };
-
-    if (windowRef.navigator.clipboard && typeof windowRef.navigator.clipboard.writeText === 'function') {
-      windowRef.navigator.clipboard.writeText(output.value).then(markCopied).catch(fallbackCopy);
-    } else {
-      fallbackCopy();
-    }
+    const succeeded = await copyText({
+      text: output.value,
+      clipboard: windowRef.navigator.clipboard,
+      fallbackCopy: () => {
+        output.select();
+        if (typeof documentRef.execCommand !== 'function') return false;
+        return documentRef.execCommand('copy');
+      }
+    });
+    showCopyFeedback(succeeded);
   }
 
   function clearAll() {
     input.value = '';
     output.value = '';
-    copyBtn.textContent = 'Copy';
-    copyBtn.classList.remove('copied');
-    update();
+    resetCopyFeedback();
+    if (copyStatus) copyStatus.textContent = '';
+    scheduler.schedule(input.value);
+    scheduler.flush();
   }
 
-  input.addEventListener('input', update);
+  input.addEventListener('input', () => scheduler.schedule(input.value));
   copyBtn.addEventListener('click', copyOutput);
   clearBtn.addEventListener('click', clearAll);
   themeBtn.addEventListener('click', toggleTheme);
@@ -345,10 +402,11 @@ function initApp(documentRef, windowRef) {
     documentRef.documentElement.setAttribute('data-theme', savedTheme);
   }
   updateThemeIcon();
-  update();
+  scheduler.schedule(input.value);
+  scheduler.flush();
 }
 
-const api = { mdToPlain, cleanUrl, createUniquePrefix };
+const api = { mdToPlain, cleanUrl, createUniquePrefix, copyText, createUpdateScheduler };
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = api;

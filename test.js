@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { mdToPlain } = require('./app.js');
+const { mdToPlain, copyText, createUpdateScheduler } = require('./app.js');
 
 test('exports the production Markdown converter', () => {
   assert.equal(typeof mdToPlain, 'function');
@@ -140,4 +140,78 @@ test('handles repeated unclosed anchors without quadratic slowdown', { timeout: 
   const started = performance.now();
   mdToPlain(source);
   assert.ok(performance.now() - started < 1000);
+});
+
+test('uses clipboard API when it succeeds', async () => {
+  let fallbackCalled = false;
+  const copied = await copyText({
+    text: 'plain',
+    clipboard: { writeText: async () => {} },
+    fallbackCopy: () => {
+      fallbackCalled = true;
+      return true;
+    }
+  });
+  assert.equal(copied, true);
+  assert.equal(fallbackCalled, false);
+});
+
+test('reports failure when clipboard rejects and fallback returns false', async () => {
+  const copied = await copyText({
+    text: 'plain',
+    clipboard: { writeText: async () => { throw new Error('denied'); } },
+    fallbackCopy: () => false
+  });
+  assert.equal(copied, false);
+});
+
+test('reports failure when fallback throws', async () => {
+  const copied = await copyText({
+    text: 'plain',
+    clipboard: null,
+    fallbackCopy: () => { throw new Error('blocked'); }
+  });
+  assert.equal(copied, false);
+});
+
+test('scheduler replaces stale pending conversions', () => {
+  const queued = new Map();
+  let nextId = 0;
+  const rendered = [];
+  const scheduler = createUpdateScheduler({
+    delay: 50,
+    compute: value => value.toUpperCase(),
+    render: value => rendered.push(value),
+    setTimer: callback => {
+      nextId += 1;
+      queued.set(nextId, callback);
+      return nextId;
+    },
+    clearTimer: id => queued.delete(id)
+  });
+
+  scheduler.schedule('first');
+  scheduler.schedule('latest');
+  [...queued.values()][0]();
+  assert.deepEqual(rendered, ['LATEST']);
+});
+
+test('scheduler flushes the latest conversion synchronously', () => {
+  const queued = new Map();
+  const rendered = [];
+  const scheduler = createUpdateScheduler({
+    delay: 50,
+    compute: value => `${value}!`,
+    render: value => rendered.push(value),
+    setTimer: callback => {
+      queued.set(1, callback);
+      return 1;
+    },
+    clearTimer: id => queued.delete(id)
+  });
+
+  scheduler.schedule('copy now');
+  scheduler.flush();
+  assert.deepEqual(rendered, ['copy now!']);
+  assert.equal(queued.size, 0);
 });
