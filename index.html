@@ -3,42 +3,55 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Handsdown is a local, single-file tool that converts Markdown into compact plain text so you can paste cleaner, smaller context into AI tools.">
+<meta name="description" content="Handsdown is a local, dependency-free tool that converts Markdown into compact plain text so you can paste cleaner, smaller context into AI tools.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 rx=%2212%22 fill=%22%2318181b%22/><path d=%22M18 18v28M46 18v28M18 32h28%22 stroke=%22white%22 stroke-width=%228%22 fill=%22none%22/></svg>">
 <title>Handsdown</title>
 <style>
 :root {
   --bg: #ffffff;
   --fg: #18181b;
   --border: #e4e4e7;
-  --muted: #a1a1aa;
+  --muted: #52525b;
   --accent: #18181b;
   --panel-bg: #fafafa;
+  --success: #15803d;
+  --danger: #b91c1c;
+  --focus: #3f3f46;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #09090b;
     --fg: #fafafa;
     --border: #27272a;
-    --muted: #52525b;
+    --muted: #a1a1aa;
     --accent: #fafafa;
     --panel-bg: #0c0c0e;
+    --success: #15803d;
+    --danger: #b91c1c;
+    --focus: #d4d4d8;
   }
 }
 html[data-theme="light"] {
   --bg: #ffffff;
   --fg: #18181b;
   --border: #e4e4e7;
-  --muted: #a1a1aa;
+  --muted: #52525b;
   --accent: #18181b;
   --panel-bg: #fafafa;
+  --success: #15803d;
+  --danger: #b91c1c;
+  --focus: #3f3f46;
 }
 html[data-theme="dark"] {
   --bg: #09090b;
   --fg: #fafafa;
   --border: #27272a;
-  --muted: #52525b;
+  --muted: #a1a1aa;
   --accent: #fafafa;
   --panel-bg: #0c0c0e;
+  --success: #15803d;
+  --danger: #b91c1c;
+  --focus: #d4d4d8;
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
@@ -46,6 +59,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -54,24 +68,25 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 24px;
+  height: 42px;
+  padding: 0 18px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 .logo {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 13px;
   letter-spacing: -0.02em;
 }
 .tagline {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--muted);
-  margin-left: 8px;
+  margin-left: 7px;
 }
 .header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
@@ -86,9 +101,11 @@ header {
   color: var(--muted);
   cursor: pointer;
   font-size: 12px;
-  padding: 4px 10px;
+  min-width: 24px;
+  min-height: 26px;
+  padding: 3px 8px;
   border-radius: 4px;
-  transition: color 0.15s;
+  transition: color 0.15s, opacity 0.15s, background-color 0.15s;
 }
 .header-btn:hover {
   color: var(--fg);
@@ -101,7 +118,7 @@ header {
 #copy {
   background: var(--fg);
   color: var(--bg);
-  padding: 4px 14px;
+  padding: 3px 11px;
 }
 #copy:disabled {
   background: none;
@@ -111,13 +128,19 @@ header {
   opacity: 0.7;
 }
 #copy.copied {
-  background: #22c55e;
+  background: var(--success);
+  color: #fff;
+}
+#copy.failed {
+  background: var(--danger);
   color: #fff;
 }
 #theme {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-width: 26px;
+  padding: 3px;
 }
 main {
   flex: 1;
@@ -137,7 +160,7 @@ main {
 .panel-label {
   display: flex;
   justify-content: space-between;
-  padding: 12px 24px 0;
+  padding: 10px 18px 4px;
   font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
@@ -151,13 +174,13 @@ main {
 }
 textarea {
   flex: 1;
-  padding: 16px 24px;
+  padding: 12px 18px;
   border: none;
   outline: none;
   resize: none;
   font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Menlo', 'Consolas', monospace;
   font-size: 13px;
-  line-height: 1.7;
+  line-height: 1.6;
   background: transparent;
   color: var(--fg);
   tab-size: 2;
@@ -165,7 +188,7 @@ textarea {
 }
 textarea::placeholder {
   color: var(--muted);
-  opacity: 0.6;
+  opacity: 1;
 }
 textarea::-webkit-scrollbar {
   width: 4px;
@@ -181,12 +204,24 @@ textarea::-webkit-scrollbar-thumb {
 #output {
   color: var(--fg);
 }
-button:focus-visible {
-  outline: none;
-  color: var(--fg);
-}
+button:focus-visible,
 textarea:focus-visible {
-  outline: none;
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+button:focus-visible {
+  outline-offset: 1px;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 @media (max-width: 768px) {
   main {
@@ -197,34 +232,73 @@ textarea:focus-visible {
     border-right: none;
     border-bottom: 1px solid var(--border);
   }
+  textarea {
+    font-size: 16px;
+  }
+}
+@media (max-width: 600px) {
+  header {
+    align-items: stretch;
+    flex-direction: column;
+    height: auto;
+    gap: 6px;
+    padding: 8px 14px;
+  }
+  .header-brand {
+    display: flex;
+    align-items: baseline;
+    min-width: 0;
+  }
+  .tagline {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .header-right {
+    width: 100%;
+  }
+  #saved {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 </style>
 </head>
 <body>
 <header>
-  <div>
+  <div class="header-brand">
     <span class="logo">Handsdown</span>
     <span class="tagline">Minimize Markdown for AI copy-paste</span>
   </div>
   <div class="header-right">
-    <span id="saved" aria-live="polite"></span>
-    <button class="header-btn" id="copy" aria-label="Copy plain text" title="Copy plain text" disabled>Copy</button>
+    <span id="saved"></span>
+    <button class="header-btn" id="copy" aria-label="Copy plain text" aria-keyshortcuts="Control+Enter Meta+Enter" title="Copy plain text (Ctrl/Cmd+Enter)" disabled>Copy</button>
     <button class="header-btn" id="clear" aria-label="Clear both panels" title="Clear both panels" disabled>Clear</button>
     <button class="header-btn" id="theme" aria-label="Toggle theme" title="Toggle theme"></button>
   </div>
+  <span id="copyStatus" class="sr-only" aria-live="polite"></span>
 </header>
 <main>
   <div class="panel">
     <label class="panel-label" for="input">
       <span>Markdown</span>
-      <span class="char-count" id="inputChars" aria-live="polite"></span>
+      <span class="char-count" id="inputChars"></span>
     </label>
     <textarea id="input" placeholder="Paste markdown here..." spellcheck="false"></textarea>
   </div>
   <div class="panel">
     <label class="panel-label" for="output">
       <span>Plain text</span>
-      <span class="char-count" id="outputChars" aria-live="polite"></span>
+      <span class="char-count" id="outputChars"></span>
     </label>
     <textarea id="output" placeholder="Minimized text will appear here…" readonly></textarea>
   </div>

@@ -250,6 +250,7 @@ function initApp(documentRef, windowRef) {
   const clearBtn = documentRef.getElementById('clear');
   const themeBtn = documentRef.getElementById('theme');
   const copyStatus = documentRef.getElementById('copyStatus');
+  const colorScheme = windowRef.matchMedia('(prefers-color-scheme: dark)');
 
   const svgNamespace = 'http://www.w3.org/2000/svg';
 
@@ -290,7 +291,7 @@ function initApp(documentRef, windowRef) {
   function isDarkMode() {
     const attr = documentRef.documentElement.getAttribute('data-theme');
     if (attr) return attr === 'dark';
-    return windowRef.matchMedia('(prefers-color-scheme: dark)').matches;
+    return colorScheme.matches;
   }
 
   function updateThemeIcon() {
@@ -350,9 +351,13 @@ function initApp(documentRef, windowRef) {
     copyBtn.textContent = succeeded ? 'Copied!' : 'Copy failed';
     copyBtn.classList.add(succeeded ? 'copied' : 'failed');
     if (copyStatus) {
-      copyStatus.textContent = succeeded
+      const message = succeeded
         ? 'Copied to clipboard.'
         : 'Copy failed. Select the plain text and copy it manually.';
+      copyStatus.textContent = '';
+      windowRef.setTimeout(() => {
+        copyStatus.textContent = message;
+      }, 0);
     }
     copyResetTimer = windowRef.setTimeout(resetCopyFeedback, 1500);
   }
@@ -387,6 +392,9 @@ function initApp(documentRef, windowRef) {
   copyBtn.addEventListener('click', copyOutput);
   clearBtn.addEventListener('click', clearAll);
   themeBtn.addEventListener('click', toggleTheme);
+  colorScheme.addEventListener('change', () => {
+    if (!documentRef.documentElement.hasAttribute('data-theme')) updateThemeIcon();
+  });
   documentRef.addEventListener('keydown', event => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       event.preventDefault();
