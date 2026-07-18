@@ -154,6 +154,27 @@ test('handles repeated unclosed anchors without quadratic slowdown', { timeout: 
   assert.ok(performance.now() - started < 1000);
 });
 
+test('restores many inline-code tokens without quadratic slowdown', { timeout: 2000 }, () => {
+  const source = Array(8_000).fill('`x`').join(' ');
+  const started = performance.now();
+  mdToPlain(source);
+  assert.ok(performance.now() - started < 250);
+});
+
+test('handles repeated no-href anchors without quadratic slowdown', { timeout: 2000 }, () => {
+  const source = `${'<a name="x">'.repeat(8_000)}</a>`;
+  const started = performance.now();
+  mdToPlain(source);
+  assert.ok(performance.now() - started < 250);
+});
+
+test('handles repeated unclosed fence openers without quadratic slowdown', { timeout: 2000 }, () => {
+  const source = '```info\n'.repeat(4_000);
+  const started = performance.now();
+  mdToPlain(source);
+  assert.ok(performance.now() - started < 250);
+});
+
 test('uses clipboard API when it succeeds', async () => {
   let fallbackCalled = false;
   const copied = await copyText({

@@ -10,22 +10,21 @@ function createUniquePrefix(text) {
 
 function createProtector(text) {
   const prefix = createUniquePrefix(text);
-  const stores = new Map();
+  const counters = new Map();
+  const replacements = new Map();
+  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const tokenPattern = new RegExp(`${escapedPrefix}[A-Z]+\\d+§§`, 'g');
 
   return {
     save(kind, content) {
-      const values = stores.get(kind) || [];
-      const token = `${prefix}${kind}${values.length}§§`;
-      values.push(content);
-      stores.set(kind, values);
+      const index = counters.get(kind) || 0;
+      const token = `${prefix}${kind}${index}§§`;
+      counters.set(kind, index + 1);
+      replacements.set(token, content);
       return token;
     },
-    restore(value, kind) {
-      const values = stores.get(kind) || [];
-      for (let index = 0; index < values.length; index += 1) {
-        value = value.replaceAll(`${prefix}${kind}${index}§§`, values[index]);
-      }
-      return value;
+    restore(value) {
+      return value.replace(tokenPattern, token => replacements.get(token) ?? token);
     }
   };
 }
@@ -33,38 +32,38 @@ function createProtector(text) {
 function protectFencedCode(text, protector) {
   const lines = text.split('\n');
   const output = [];
+  let fence = null;
 
-  for (let index = 0; index < lines.length; index += 1) {
-    const opening = lines[index].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
-    if (!opening) {
-      output.push(lines[index]);
-      continue;
-    }
-
-    const fenceCharacter = opening[1][0];
-    const fenceLength = opening[1].length;
-    let closingIndex = -1;
-
-    for (let candidate = index + 1; candidate < lines.length; candidate += 1) {
-      const closing = lines[candidate].match(/^ {0,3}(`+|~+)[ \t]*$/);
-      if (closing && closing[1][0] === fenceCharacter && closing[1].length >= fenceLength) {
-        closingIndex = candidate;
-        break;
-      }
-    }
-
-    if (closingIndex === -1) {
-      output.push(lines[index]);
-      continue;
-    }
-
-    const content = lines.slice(index + 1, closingIndex).join('\n');
+  function saveFence(hasFollowingContent) {
+    const content = fence.lines.join('\n');
     if (output.length > 0 && output.at(-1) !== '') output.push('');
     output.push(protector.save('CB', content));
-    if (closingIndex + 1 < lines.length && lines[closingIndex + 1] !== '') output.push('');
-    index = closingIndex;
+    if (hasFollowingContent) output.push('');
+    fence = null;
   }
 
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    if (!fence) {
+      const opening = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      if (opening) {
+        fence = { character: opening[1][0], length: opening[1].length, lines: [] };
+      } else {
+        output.push(line);
+      }
+      continue;
+    }
+
+    const closing = line.match(/^ {0,3}(`+|~+)[ \t]*$/);
+    if (closing && closing[1][0] === fence.character && closing[1].length >= fence.length) {
+      saveFence(index + 1 < lines.length && lines[index + 1] !== '');
+    } else {
+      fence.lines.push(line);
+    }
+  }
+
+  if (fence) saveFence(false);
   return output.join('\n');
 }
 
@@ -75,7 +74,7 @@ function protectIndentedCode(text, protector) {
     .join('\n');
 }
 
-function protectInlineCode(text, protector) {
+function protectInlineCode(text, protector, blockFenceAware = false) {
   let result = '';
   let cursor = 0;
 
@@ -88,6 +87,18 @@ function protectInlineCode(text, protector) {
     while (text[openingIndex + runLength] === '`') runLength += 1;
 
     const delimiter = '`'.repeat(runLength);
+    if (blockFenceAware) {
+      const lineStart = text.lastIndexOf('\n', openingIndex - 1) + 1;
+      const linePrefix = text.slice(lineStart, openingIndex);
+      const isBlockFence = runLength >= 3 && /^ {0,3}$/.test(linePrefix);
+      const isIndentedCode = /^( {4,}|\t)/.test(linePrefix);
+      if (runLength < 3 || isBlockFence || isIndentedCode) {
+        result += delimiter;
+        cursor = openingIndex + runLength;
+        continue;
+      }
+    }
+
     let closingIndex = text.indexOf(delimiter, openingIndex + runLength);
     while (
       closingIndex !== -1 &&
@@ -127,9 +138,6 @@ function replaceHtmlAnchors(text) {
     const tagEnd = text.indexOf('>', openingIndex + 3);
     if (tagEnd === -1) return result + text.slice(openingIndex);
 
-    const closingIndex = lowerText.indexOf('</a>', tagEnd + 1);
-    if (closingIndex === -1) return result + text.slice(openingIndex);
-
     const openingTag = text.slice(openingIndex, tagEnd + 1);
     const hrefMatch = openingTag.match(/\bhref=["']([^"']+)["']/i);
     if (!hrefMatch) {
@@ -137,6 +145,9 @@ function replaceHtmlAnchors(text) {
       cursor = tagEnd + 1;
       continue;
     }
+
+    const closingIndex = lowerText.indexOf('</a>', tagEnd + 1);
+    if (closingIndex === -1) return result + text.slice(openingIndex);
 
     const label = text.slice(tagEnd + 1, closingIndex).replace(/<\/?[a-z][^>\n]*>/g, '').trim();
     const url = cleanUrl(hrefMatch[1]);
@@ -153,6 +164,7 @@ function mdToPlain(text) {
   const protector = createProtector(text);
   const markdownDestination = String.raw`\(\s*([^\s)]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)`;
 
+  text = protectInlineCode(text, protector, true);
   text = protectFencedCode(text, protector);
   text = protectIndentedCode(text, protector);
   text = protectInlineCode(text, protector);
@@ -215,9 +227,7 @@ function mdToPlain(text) {
     .replace(/^\n+/, '')
     .replace(/\n+$/, '');
 
-  text = protector.restore(text, 'IC');
-  text = protector.restore(text, 'ID');
-  text = protector.restore(text, 'CB');
+  text = protector.restore(text);
   return text.replace(/^\n+/, '').replace(/\n+$/, '');
 }
 
