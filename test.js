@@ -147,6 +147,18 @@ test('preserves tel autolinks without the scheme', () => {
   assert.equal(mdToPlain('<tel:+14155551234>'), '+14155551234');
 });
 
+test('preserves URLs from valid HTML anchor attribute forms', () => {
+  const cases = [
+    '<a href = "https://example.com">label</a>',
+    '<a\thref="https://example.com">label</a>',
+    '<a class="link" href=https://example.com>label</a>',
+    '<A data-kind="link" HREF = https://example.com>label</A>'
+  ];
+  for (const source of cases) {
+    assert.equal(mdToPlain(source), 'label example.com');
+  }
+});
+
 test('handles repeated unclosed anchors without quadratic slowdown', { timeout: 2000 }, () => {
   const source = '<a href="https://example.com">'.repeat(20_000);
   const started = performance.now();

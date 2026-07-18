@@ -130,16 +130,25 @@ function replaceHtmlAnchors(text) {
   let result = '';
   let cursor = 0;
 
+  function findOpeningIndex(start) {
+    let index = lowerText.indexOf('<a', start);
+    while (index !== -1) {
+      if (/\s/.test(text[index + 2] || '')) return index;
+      index = lowerText.indexOf('<a', index + 2);
+    }
+    return -1;
+  }
+
   while (cursor < text.length) {
-    const openingIndex = lowerText.indexOf('<a ', cursor);
+    const openingIndex = findOpeningIndex(cursor);
     if (openingIndex === -1) return result + text.slice(cursor);
 
     result += text.slice(cursor, openingIndex);
-    const tagEnd = text.indexOf('>', openingIndex + 3);
+    const tagEnd = text.indexOf('>', openingIndex + 2);
     if (tagEnd === -1) return result + text.slice(openingIndex);
 
     const openingTag = text.slice(openingIndex, tagEnd + 1);
-    const hrefMatch = openingTag.match(/\bhref=["']([^"']+)["']/i);
+    const hrefMatch = openingTag.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i);
     if (!hrefMatch) {
       result += openingTag;
       cursor = tagEnd + 1;
@@ -150,7 +159,7 @@ function replaceHtmlAnchors(text) {
     if (closingIndex === -1) return result + text.slice(openingIndex);
 
     const label = text.slice(tagEnd + 1, closingIndex).replace(/<\/?[a-z][^>\n]*>/g, '').trim();
-    const url = cleanUrl(hrefMatch[1]);
+    const url = cleanUrl(hrefMatch[1] ?? hrefMatch[2] ?? hrefMatch[3]);
     result += label ? `${label} ${url}` : url;
     cursor = closingIndex + 4;
   }
