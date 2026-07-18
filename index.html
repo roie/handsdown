@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Handsdown is a local, single-file tool that converts Markdown into compact plain text so you can paste cleaner, smaller context into AI tools.">
+<title>Handsdown</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --fg: #18181b;
+  --border: #e4e4e7;
+  --muted: #a1a1aa;
+  --accent: #18181b;
+  --panel-bg: #fafafa;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #09090b;
+    --fg: #fafafa;
+    --border: #27272a;
+    --muted: #52525b;
+    --accent: #fafafa;
+    --panel-bg: #0c0c0e;
+  }
+}
+html[data-theme="light"] {
+  --bg: #ffffff;
+  --fg: #18181b;
+  --border: #e4e4e7;
+  --muted: #a1a1aa;
+  --accent: #18181b;
+  --panel-bg: #fafafa;
+}
+html[data-theme="dark"] {
+  --bg: #09090b;
+  --fg: #fafafa;
+  --border: #27272a;
+  --muted: #52525b;
+  --accent: #fafafa;
+  --panel-bg: #0c0c0e;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 24px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.logo {
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+.tagline {
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 8px;
+}
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+#saved {
+  color: var(--muted);
+  min-width: 60px;
+  text-align: right;
+}
+.header-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+.header-btn:hover {
+  color: var(--fg);
+}
+.header-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+  color: var(--muted);
+}
+#copy {
+  background: var(--fg);
+  color: var(--bg);
+  padding: 4px 14px;
+}
+#copy:disabled {
+  background: none;
+  color: var(--muted);
+}
+#copy:hover:not(:disabled) {
+  opacity: 0.7;
+}
+#copy.copied {
+  background: #22c55e;
+  color: #fff;
+}
+#theme {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 0;
+}
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel-bg);
+}
+.panel:first-child {
+  border-right: 1px solid var(--border);
+}
+.panel-label {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 24px 0;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  user-select: none;
+}
+.char-count {
+  font-weight: 400;
+  opacity: 0.7;
+}
+textarea {
+  flex: 1;
+  padding: 16px 24px;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  background: transparent;
+  color: var(--fg);
+  tab-size: 2;
+  min-height: 0;
+}
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.6;
+}
+textarea::-webkit-scrollbar {
+  width: 4px;
+}
+textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+textarea::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+  cursor: default;
+}
+#output {
+  color: var(--fg);
+}
+button:focus-visible {
+  outline: none;
+  color: var(--fg);
+}
+textarea:focus-visible {
+  outline: none;
+}
+@media (max-width: 768px) {
+  main {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+  .panel:first-child {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <span class="logo">Handsdown</span>
+    <span class="tagline">Minimize Markdown for AI copy-paste</span>
+  </div>
+  <div class="header-right">
+    <span id="saved" aria-live="polite"></span>
+    <button class="header-btn" id="copy" aria-label="Copy plain text" title="Copy plain text" disabled>Copy</button>
+    <button class="header-btn" id="clear" aria-label="Clear both panels" title="Clear both panels" disabled>Clear</button>
+    <button class="header-btn" id="theme" aria-label="Toggle theme" title="Toggle theme"></button>
+  </div>
+</header>
+<main>
+  <div class="panel">
+    <label class="panel-label" for="input">
+      <span>Markdown</span>
+      <span class="char-count" id="inputChars" aria-live="polite"></span>
+    </label>
+    <textarea id="input" placeholder="Paste markdown here..." spellcheck="false"></textarea>
+  </div>
+  <div class="panel">
+    <label class="panel-label" for="output">
+      <span>Plain text</span>
+      <span class="char-count" id="outputChars" aria-live="polite"></span>
+    </label>
+    <textarea id="output" placeholder="Minimized text will appear here…" readonly></textarea>
+  </div>
+</main>
+<script src="./app.js" defer></script>
+</body>
+</html>
