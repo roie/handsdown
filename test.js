@@ -6,12 +6,55 @@ const {
   copyText,
   createUpdateScheduler,
   createCopyCoordinator,
-  formatCount
+  formatCount,
+  isMarkdownFile,
+  readMarkdownFile
 } = require('./app.js');
 
 test('exports the production Markdown converter', () => {
   assert.equal(typeof mdToPlain, 'function');
   assert.equal(mdToPlain('**bold**'), 'bold');
+});
+
+test('accepts only Markdown file extensions', () => {
+  for (const name of ['notes.md', 'notes.markdown', 'NOTES.MD', 'NOTES.Markdown']) {
+    assert.equal(isMarkdownFile({ name }), true);
+  }
+  for (const name of ['notes.txt', 'notes.md.txt', 'notes', '.mdx']) {
+    assert.equal(isMarkdownFile({ name }), false);
+  }
+  assert.equal(isMarkdownFile(null), false);
+});
+
+test('reads valid Markdown files locally', async () => {
+  const result = await readMarkdownFile({
+    name: 'notes.md',
+    text: async () => '# Notes'
+  });
+  assert.deepEqual(result, { ok: true, text: '# Notes' });
+});
+
+test('rejects invalid files without reading them', async () => {
+  let read = false;
+  const result = await readMarkdownFile({
+    name: 'notes.txt',
+    text: async () => {
+      read = true;
+      return 'plain';
+    }
+  });
+  assert.deepEqual(result, { ok: false, reason: 'type' });
+  assert.equal(read, false);
+});
+
+test('reports Markdown file read failures', async () => {
+  const result = await readMarkdownFile({
+    name: 'notes.markdown',
+    text: async () => {
+      throw new Error('unreadable');
+    }
+  });
+  assert.deepEqual(result, { ok: false, reason: 'read' });
 });
 
 const conversionCases = [

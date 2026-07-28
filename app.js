@@ -394,16 +394,33 @@ function formatCount(number, singular) {
   return `${number.toLocaleString()} ${number === 1 ? singular : `${singular}s`}`;
 }
 
+function isMarkdownFile(file) {
+  return typeof file?.name === 'string' && /\.(?:md|markdown)$/i.test(file.name);
+}
+
+async function readMarkdownFile(file) {
+  if (!isMarkdownFile(file)) return { ok: false, reason: 'type' };
+  try {
+    return { ok: true, text: await file.text() };
+  } catch {
+    return { ok: false, reason: 'read' };
+  }
+}
+
 function initApp(documentRef, windowRef) {
   const input = documentRef.getElementById('input');
   const output = documentRef.getElementById('output');
   const inputChars = documentRef.getElementById('inputChars');
   const outputChars = documentRef.getElementById('outputChars');
   const savedEl = documentRef.getElementById('saved');
+  const openFileBtn = documentRef.getElementById('openFile');
+  const fileInput = documentRef.getElementById('fileInput');
+  const inputPanel = documentRef.getElementById('inputPanel');
   const copyBtn = documentRef.getElementById('copy');
   const clearBtn = documentRef.getElementById('clear');
   const themeBtn = documentRef.getElementById('theme');
   const copyStatus = documentRef.getElementById('copyStatus');
+  const fileStatus = documentRef.getElementById('fileStatus');
   const colorScheme = windowRef.matchMedia('(prefers-color-scheme: dark)');
 
   const svgNamespace = 'http://www.w3.org/2000/svg';
@@ -491,6 +508,69 @@ function initApp(documentRef, windowRef) {
     clearTimer: windowRef.clearTimeout.bind(windowRef)
   });
 
+  let fileFeedbackTimer = null;
+  let fileLoadGeneration = 0;
+  let dragDepth = 0;
+
+  function clearFileFeedback() {
+    if (fileFeedbackTimer !== null) windowRef.clearTimeout(fileFeedbackTimer);
+    fileFeedbackTimer = null;
+    savedEl.classList.remove('error');
+    if (fileStatus) fileStatus.textContent = '';
+  }
+
+  function showFileFeedback(message) {
+    clearFileFeedback();
+    savedEl.textContent = message;
+    savedEl.classList.add('error');
+    if (fileStatus) {
+      windowRef.setTimeout(() => {
+        fileStatus.textContent = message;
+      }, 0);
+    }
+    fileFeedbackTimer = windowRef.setTimeout(() => {
+      fileFeedbackTimer = null;
+      savedEl.classList.remove('error');
+      if (fileStatus) fileStatus.textContent = '';
+      scheduler.schedule(input.value);
+      scheduler.flush();
+    }, 1500);
+  }
+
+  async function loadFiles(files) {
+    if (files.length === 0) return;
+    const generation = ++fileLoadGeneration;
+    if (files.length !== 1) {
+      showFileFeedback('Open one file at a time');
+      return;
+    }
+
+    const result = await readMarkdownFile(files[0]);
+    if (generation !== fileLoadGeneration) return;
+    if (!result.ok) {
+      showFileFeedback(result.reason === 'type' ? 'Markdown files only' : 'Could not open file');
+      return;
+    }
+
+    clearFileFeedback();
+    copyCoordinator.invalidate();
+    resetCopyFeedback();
+    if (copyStatus) copyStatus.textContent = '';
+    input.value = result.text;
+    scheduler.schedule(input.value);
+    scheduler.flush();
+    input.focus();
+  }
+
+  function hasDraggedFiles(event) {
+    return Array.from(event.dataTransfer?.types || []).includes('Files');
+  }
+
+  function resetDragState() {
+    dragDepth = 0;
+    inputPanel.classList.remove('drag-active');
+  }
+
   let copyResetTimer = null;
 
   function resetCopyFeedback() {
@@ -537,16 +617,61 @@ function initApp(documentRef, windowRef) {
   }
 
   function clearAll() {
+    fileLoadGeneration += 1;
+    resetDragState();
     copyCoordinator.invalidate();
     input.value = '';
     output.value = '';
     resetCopyFeedback();
+    clearFileFeedback();
     if (copyStatus) copyStatus.textContent = '';
     scheduler.schedule(input.value);
     scheduler.flush();
   }
 
-  input.addEventListener('input', () => scheduler.schedule(input.value));
+  input.addEventListener('input', () => {
+    fileLoadGeneration += 1;
+    clearFileFeedback();
+    scheduler.schedule(input.value);
+  });
+  openFileBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    const files = Array.from(fileInput.files || []);
+    fileInput.value = '';
+    loadFiles(files);
+  });
+  inputPanel.addEventListener('dragenter', event => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    dragDepth += 1;
+    inputPanel.classList.add('drag-active');
+  });
+  inputPanel.addEventListener('dragover', event => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  });
+  inputPanel.addEventListener('dragleave', () => {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) inputPanel.classList.remove('drag-active');
+  });
+  inputPanel.addEventListener('drop', event => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    resetDragState();
+    loadFiles(Array.from(event.dataTransfer.files || []));
+  });
+  documentRef.addEventListener('dragover', event => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = inputPanel.contains(event.target) ? 'copy' : 'none';
+  });
+  documentRef.addEventListener('drop', event => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    resetDragState();
+  });
+  documentRef.addEventListener('dragend', resetDragState);
   copyBtn.addEventListener('click', copyOutput);
   clearBtn.addEventListener('click', clearAll);
   themeBtn.addEventListener('click', toggleTheme);
@@ -579,7 +704,9 @@ const api = {
   copyText,
   createCopyCoordinator,
   createUpdateScheduler,
-  formatCount
+  formatCount,
+  isMarkdownFile,
+  readMarkdownFile
 };
 
 if (typeof module !== 'undefined' && module.exports) {

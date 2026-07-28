@@ -95,6 +95,9 @@ header {
   min-width: 60px;
   text-align: right;
 }
+#saved.error {
+  color: var(--danger);
+}
 .header-btn {
   background: none;
   border: none;
@@ -156,6 +159,9 @@ main {
 }
 .panel:first-child {
   border-right: 1px solid var(--border);
+}
+.panel.drag-active {
+  box-shadow: inset 0 0 0 2px var(--focus);
 }
 .panel-label {
   display: flex;
@@ -281,14 +287,17 @@ button:focus-visible {
   </div>
   <div class="header-right">
     <span id="saved"></span>
+    <button class="header-btn" id="openFile" aria-label="Open Markdown file" title="Open Markdown file">Open</button>
+    <input id="fileInput" type="file" accept=".md,.markdown,text/markdown" hidden>
     <button class="header-btn" id="copy" aria-label="Copy plain text" aria-keyshortcuts="Control+Enter Meta+Enter" title="Copy plain text (Ctrl/Cmd+Enter)" disabled>Copy</button>
     <button class="header-btn" id="clear" aria-label="Clear both panels" title="Clear both panels" disabled>Clear</button>
     <button class="header-btn" id="theme" aria-label="Toggle theme" title="Toggle theme"></button>
   </div>
   <span id="copyStatus" class="sr-only" aria-live="polite"></span>
+  <span id="fileStatus" class="sr-only" aria-live="polite"></span>
 </header>
 <main>
-  <div class="panel">
+  <div class="panel" id="inputPanel">
     <label class="panel-label" for="input">
       <span>Markdown</span>
       <span class="char-count" id="inputChars"></span>
