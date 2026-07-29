@@ -407,6 +407,23 @@ async function readMarkdownFile(file) {
   }
 }
 
+function matchesCommandShortcut(event, key) {
+  return (
+    Boolean(event.ctrlKey || event.metaKey) &&
+    !event.altKey &&
+    !event.shiftKey &&
+    event.key.toLowerCase() === key.toLowerCase()
+  );
+}
+
+function shouldCaptureInitialPaste({ inputValue, target, clipboardText }) {
+  const tagName = target?.tagName?.toUpperCase();
+  const editableField =
+    ((tagName === 'INPUT' || tagName === 'TEXTAREA') && !target.readOnly && !target.disabled) ||
+    Boolean(target?.isContentEditable);
+  return inputValue === '' && clipboardText !== '' && !editableField;
+}
+
 function initApp(documentRef, windowRef) {
   const input = documentRef.getElementById('input');
   const output = documentRef.getElementById('output');
@@ -627,6 +644,7 @@ function initApp(documentRef, windowRef) {
     if (copyStatus) copyStatus.textContent = '';
     scheduler.schedule(input.value);
     scheduler.flush();
+    input.focus();
   }
 
   input.addEventListener('input', () => {
@@ -678,10 +696,36 @@ function initApp(documentRef, windowRef) {
   colorScheme.addEventListener('change', () => {
     if (!documentRef.documentElement.hasAttribute('data-theme')) updateThemeIcon();
   });
+  documentRef.addEventListener('paste', event => {
+    const clipboardText = event.clipboardData?.getData('text/plain') || '';
+    if (!shouldCaptureInitialPaste({ inputValue: input.value, target: event.target, clipboardText })) {
+      return;
+    }
+    event.preventDefault();
+    input.value = clipboardText;
+    input.dispatchEvent(new windowRef.Event('input', { bubbles: true }));
+    scheduler.flush();
+    input.focus();
+  });
   documentRef.addEventListener('keydown', event => {
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+    if (matchesCommandShortcut(event, 'o')) {
+      event.preventDefault();
+      fileInput.click();
+      return;
+    }
+    if (matchesCommandShortcut(event, 'Enter')) {
       event.preventDefault();
       copyOutput();
+      return;
+    }
+    if (
+      event.key === 'Escape' &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      !event.shiftKey
+    ) {
+      input.focus();
     }
   });
 
@@ -706,7 +750,9 @@ const api = {
   createUpdateScheduler,
   formatCount,
   isMarkdownFile,
-  readMarkdownFile
+  readMarkdownFile,
+  matchesCommandShortcut,
+  shouldCaptureInitialPaste
 };
 
 if (typeof module !== 'undefined' && module.exports) {

@@ -8,12 +8,84 @@ const {
   createCopyCoordinator,
   formatCount,
   isMarkdownFile,
-  readMarkdownFile
+  readMarkdownFile,
+  matchesCommandShortcut,
+  shouldCaptureInitialPaste
 } = require('./app.js');
 
 test('exports the production Markdown converter', () => {
   assert.equal(typeof mdToPlain, 'function');
   assert.equal(mdToPlain('**bold**'), 'bold');
+});
+
+test('matches exact command shortcuts', () => {
+  assert.equal(
+    matchesCommandShortcut(
+      { ctrlKey: true, metaKey: false, altKey: false, shiftKey: false, key: 'o' },
+      'o'
+    ),
+    true
+  );
+  assert.equal(
+    matchesCommandShortcut(
+      { ctrlKey: false, metaKey: true, altKey: false, shiftKey: false, key: 'O' },
+      'o'
+    ),
+    true
+  );
+  assert.equal(
+    matchesCommandShortcut(
+      { ctrlKey: true, metaKey: false, altKey: false, shiftKey: true, key: 'o' },
+      'o'
+    ),
+    false
+  );
+  assert.equal(
+    matchesCommandShortcut(
+      { ctrlKey: true, metaKey: false, altKey: true, shiftKey: false, key: 'o' },
+      'o'
+    ),
+    false
+  );
+  assert.equal(
+    matchesCommandShortcut(
+      { ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, key: 'o' },
+      'o'
+    ),
+    false
+  );
+});
+
+test('captures only an initial paste outside editable fields', () => {
+  const body = { tagName: 'BODY', isContentEditable: false };
+  assert.equal(
+    shouldCaptureInitialPaste({ inputValue: '', target: body, clipboardText: '# Ready' }),
+    true
+  );
+  assert.equal(
+    shouldCaptureInitialPaste({ inputValue: 'existing', target: body, clipboardText: '# Ready' }),
+    false
+  );
+  assert.equal(
+    shouldCaptureInitialPaste({ inputValue: '', target: body, clipboardText: '' }),
+    false
+  );
+  assert.equal(
+    shouldCaptureInitialPaste({
+      inputValue: '',
+      target: { tagName: 'TEXTAREA', readOnly: false, disabled: false },
+      clipboardText: '# Ready'
+    }),
+    false
+  );
+  assert.equal(
+    shouldCaptureInitialPaste({
+      inputValue: '',
+      target: { tagName: 'DIV', isContentEditable: true },
+      clipboardText: '# Ready'
+    }),
+    false
+  );
 });
 
 test('accepts only Markdown file extensions', () => {

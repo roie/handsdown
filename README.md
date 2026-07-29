@@ -39,6 +39,14 @@ Paste Markdown directly, use the folder button beside **Markdown** for a `.md` o
 - **Definition lists, sub/superscript, insert/mark** — not handled (parser territory).
 - **Uppercase HTML tags** (`<DIV>`) intentionally not stripped.
 
+## Keyboard
+
+- **Ctrl/Cmd+V** — paste immediately when the Markdown editor is empty, even before focusing it
+- **Ctrl/Cmd+O** — open a Markdown file
+- **Ctrl/Cmd+Enter** — copy the converted plain text
+- **Escape** — focus the Markdown editor
+- **Tab / Shift+Tab** — move through controls and panels
+
 ## Tests
 
 ```sh
