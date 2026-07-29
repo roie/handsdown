@@ -8,7 +8,7 @@ Paste markdown in, get compact plain text out. Strips formatting noise while pre
 
 Everything runs locally in your browser—nothing is uploaded, and there are no accounts or dependencies.
 
-Paste Markdown directly, choose **Open** for a `.md` or `.markdown` file, or drop one onto the Markdown panel. Files are read locally in the browser and are never uploaded.
+Paste Markdown directly, use the folder button beside **Markdown** for a `.md` or `.markdown` file, or drop one onto that panel. Files are read locally in the browser and are never uploaded.
 
 ## What it strips
 

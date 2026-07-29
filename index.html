@@ -165,14 +165,42 @@ main {
 }
 .panel-label {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  padding: 10px 18px 4px;
+  min-height: 28px;
+  padding: 4px 12px 0 18px;
   font-size: 11px;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
   user-select: none;
+}
+.panel-label-title {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.panel-open {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.panel-open svg {
+  display: block;
+}
+.panel-open:hover {
+  color: var(--fg);
 }
 .char-count {
   font-weight: 400;
@@ -287,8 +315,6 @@ button:focus-visible {
   </div>
   <div class="header-right">
     <span id="saved"></span>
-    <button class="header-btn" id="openFile" aria-label="Open Markdown file" title="Open Markdown file">Open</button>
-    <input id="fileInput" type="file" accept=".md,.markdown,text/markdown" hidden>
     <button class="header-btn" id="copy" aria-label="Copy plain text" aria-keyshortcuts="Control+Enter Meta+Enter" title="Copy plain text (Ctrl/Cmd+Enter)" disabled>Copy</button>
     <button class="header-btn" id="clear" aria-label="Clear both panels" title="Clear both panels" disabled>Clear</button>
     <button class="header-btn" id="theme" aria-label="Toggle theme" title="Toggle theme"></button>
@@ -298,10 +324,19 @@ button:focus-visible {
 </header>
 <main>
   <div class="panel" id="inputPanel">
-    <label class="panel-label" for="input">
-      <span>Markdown</span>
+    <div class="panel-label">
+      <div class="panel-label-title">
+        <label for="input">Markdown</label>
+        <button class="panel-open" id="openFile" aria-label="Open Markdown file" title="Open Markdown file">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 17.5V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" />
+            <path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H5a2 2 0 0 1-1.94-2.5l2-8A2 2 0 0 1 7 8h13" />
+          </svg>
+        </button>
+        <input id="fileInput" type="file" accept=".md,.markdown,text/markdown" hidden>
+      </div>
       <span class="char-count" id="inputChars"></span>
-    </label>
+    </div>
     <textarea id="input" placeholder="Paste markdown here..." spellcheck="false"></textarea>
   </div>
   <div class="panel">
