@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { readFileSync } = require('node:fs');
 
 const {
   mdToPlain,
@@ -17,6 +18,31 @@ const {
 test('exports the production Markdown converter', () => {
   assert.equal(typeof mdToPlain, 'function');
   assert.equal(mdToPlain('**bold**'), 'bold');
+});
+
+function relativeLuminance(hex) {
+  const channels = [1, 3, 5].map(index => Number.parseInt(hex.slice(index, index + 2), 16) / 255);
+  const [red, green, blue] = channels.map(channel =>
+    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+  );
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function contrastRatio(first, second) {
+  const [lighter, darker] = [relativeLuminance(first), relativeLuminance(second)].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+test('dark error status meets WCAG AA contrast', () => {
+  const html = readFileSync(`${__dirname}/index.html`, 'utf8');
+  const darkTheme = html.match(/html\[data-theme="dark"\]\s*\{([^}]*)\}/s);
+  assert.ok(darkTheme, 'dark theme tokens must exist');
+  const background = darkTheme[1].match(/--bg:\s*(#[0-9a-f]{6})/i);
+  const dangerText = darkTheme[1].match(/--danger-text:\s*(#[0-9a-f]{6})/i);
+  assert.ok(background, 'dark theme background token must exist');
+  assert.ok(dangerText, 'dark theme danger text token must exist');
+  assert.ok(contrastRatio(dangerText[1], background[1]) >= 4.5);
+  assert.match(html, /#saved\.error\s*\{\s*color:\s*var\(--danger-text\);\s*\}/);
 });
 
 test('matches exact command shortcuts', () => {
