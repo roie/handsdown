@@ -217,7 +217,7 @@ const conversionCases = [
   ['autolink mailto', '<mailto:user@example.com>', 'user@example.com'],
   ['email autolink', '<hello@example.com>', 'hello@example.com'],
   ['email autolink preserves case and punctuation', '<First.Last+tag@Sub.Example.com>', 'First.Last+tag@Sub.Example.com'],
-  ['email autolink requires dotted domain', 'Before <hello@example> after', 'Before after'],
+  ['malformed email autolink preserved', 'Before <hello@example> after', 'Before <hello@example> after'],
   ['link basic', '[text](url)', 'text url'],
   ['link heading', '### [Abbreviations](https://github.com/markdown-it/markdown-it-abbr)', 'Abbreviations github.com/markdown-it/markdown-it-abbr'],
   ['link http', '[a](http://example.com)', 'a example.com'],
@@ -245,9 +245,23 @@ const conversionCases = [
   ['HTML uppercase block structure', '<DIV>x</DIV>', 'x'],
   ['HTML generic safe', 'Array<T>', 'Array<T>'],
   ['comparison safe', 'x <= 1', 'x <= 1'],
+  ['comparison angle syntax preserved', 'x<y>', 'x<y>'],
+  ['lowercase generic type preserved', 'Array<string>', 'Array<string>'],
+  ['unknown lowercase tags preserved', '<widget>text</widget>', '<widget>text</widget>'],
+  ['custom elements preserved', '<custom-widget>text</custom-widget>', '<custom-widget>text</custom-widget>'],
+  ['MDX components preserved', '<Callout>text</Callout>', '<Callout>text</Callout>'],
+  ['SVG tags preserved', '<svg viewBox="0 0 1 1"><path /></svg>', '<svg viewBox="0 0 1 1"><path /></svg>'],
+  ['MathML tags preserved', '<math><mi>x</mi></math>', '<math><mi>x</mi></math>'],
+  ['recognized lowercase inline HTML stripped', '<span>text</span>', 'text'],
+  ['recognized uppercase inline HTML stripped', '<SPAN>text</SPAN>', 'text'],
+  ['recognized attributed HTML stripped', '<strong class="loud">text</strong>', 'text'],
+  ['malformed tag-shaped text preserved', 'before <span after', 'before <span after'],
+  ['non-tag punctuation after recognized names preserved', '<a@b> <span.foo>', '<a@b> <span.foo>'],
+  ['recognized tags inside inline code remain exact', '`<span>text</span>`', '<span>text</span>'],
   ['anchor preserves href', '<a href="https://example.com/path">text</a>', 'text example.com/path'],
   ['anchor no href', '<a name="x">text</a>', 'text'],
   ['anchor with inner HTML', '<a href="url"><strong>bold</strong></a>', 'bold url'],
+  ['unknown tags inside anchor labels preserved', '<a href="url"><widget>text</widget></a>', '<widget>text</widget> url'],
   ['anchor non-href tag preserved', '<abbr title="HTML">text</abbr>', 'text'],
   ['HTML named entities', 'Tom &amp; Jerry &lt;3 &quot;yes&quot; &apos;ok&apos; A&nbsp;B', 'Tom & Jerry <3 "yes" \'ok\' A B'],
   ['HTML decimal entity', 'A &#38; B', 'A & B'],
@@ -376,6 +390,14 @@ test('handles repeated unclosed anchors without quadratic slowdown', { timeout: 
   const source = '<a href="https://example.com">'.repeat(20_000);
   const started = performance.now();
   mdToPlain(source);
+  assert.ok(performance.now() - started < 1000);
+});
+
+test('preserves repeated unknown tags without quadratic slowdown', { timeout: 2000 }, () => {
+  const source = '<widget>'.repeat(20_000);
+  const started = performance.now();
+  const output = mdToPlain(source);
+  assert.equal(output, source);
   assert.ok(performance.now() - started < 1000);
 });
 

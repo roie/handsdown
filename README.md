@@ -15,7 +15,7 @@ Paste Markdown directly, use the clipboard button beside **Markdown**, open a `.
 - Headings, bold, italic, strikethrough, blockquotes, horizontal rules
 - Unordered list markers (`-`, `*`, and `+`)
 - Inline code and fenced code blocks (content preserved)
-- HTML tags (except `<a>` — href is preserved like markdown links)
+- Recognized HTML tags (except `<a>` — href is preserved like markdown links)
 - Table separator rows and outer pipes
 - Container fences (`:::`) on standalone lines
 - Alt-heading underlines (`===`)
@@ -34,12 +34,11 @@ Paste Markdown directly, use the clipboard button beside **Markdown**, open a `.
 
 ## Known limitations
 
-- **`x<y>` false positive** — stripped as HTML. Code blocks are protected; rare in prose.
 - **URLs with parentheses** — `[text](url(parens))` fails to parse.
 - **Reference-style links** — `[text][ref]` and `[ref]: url` pass through unprocessed.
 - **Task lists** — `- [x]` / `- [ ]` not stripped.
 - **Definition lists, sub/superscript, insert/mark** — not handled (parser territory).
-- **Uppercase inline HTML tags** (`<SPAN>`) intentionally not stripped; recognized structural tags are case-insensitive.
+- **Unknown/custom tags** — SVG, MathML, and MDX component tags pass through unchanged.
 
 ## Keyboard
 

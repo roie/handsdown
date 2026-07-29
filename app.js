@@ -172,6 +172,37 @@ function cleanUrl(url) {
     .replace(/^www\./i, '');
 }
 
+const RECOGNIZED_HTML_TAGS = new Set(
+  `a abbr address area article aside audio
+b base bdi bdo blockquote body br button
+canvas caption cite code col colgroup
+data datalist dd del details dfn dialog div dl dt
+em embed
+fieldset figcaption figure footer form
+h1 h2 h3 h4 h5 h6 head header hgroup hr html
+i iframe img input ins
+kbd
+label legend li link
+main map mark menu meta meter
+nav noscript
+object ol optgroup option output
+p picture pre progress
+q
+rp rt ruby
+s samp script search section select slot small source span strong style sub summary sup
+table tbody td template textarea tfoot th thead time title tr track
+u ul
+var video
+wbr
+acronym big center dir font frame frameset marquee nobr param strike tt`.split(/\s+/)
+);
+
+function stripRecognizedHtmlTags(text) {
+  return text.replace(/<\/?([a-z][a-z0-9-]*)(?=\s|\/?>)[^>\n]*>/gi, (tag, name) =>
+    RECOGNIZED_HTML_TAGS.has(name.toLowerCase()) ? '' : tag
+  );
+}
+
 function decodeHtmlEntities(text) {
   const namedEntities = {
     amp: '&',
@@ -238,7 +269,7 @@ function replaceHtmlAnchors(text) {
     const closingIndex = lowerText.indexOf('</a>', tagEnd + 1);
     if (closingIndex === -1) return result + text.slice(openingIndex);
 
-    const label = text.slice(tagEnd + 1, closingIndex).replace(/<\/?[a-z][^>\n]*>/g, '').trim();
+    const label = stripRecognizedHtmlTags(text.slice(tagEnd + 1, closingIndex)).trim();
     const url = cleanUrl(hrefMatch[1] ?? hrefMatch[2] ?? hrefMatch[3]);
     result += label ? `${label} ${url}` : url;
     cursor = closingIndex + 4;
@@ -321,7 +352,7 @@ function mdToPlain(text) {
   text = text.replace(/\\([\\`*_{}[\]()#+\-.!])/g, '$1');
   text = preserveHtmlStructure(text);
   text = replaceHtmlAnchors(text);
-  text = text.replace(/<\/?[a-z][^>\n]*>/g, '');
+  text = stripRecognizedHtmlTags(text);
 
   text = text.replace(new RegExp(String.raw`!\[([^\]]*)\]${markdownDestination}`, 'g'), (_, alt, url) => {
     alt = alt.trim();
