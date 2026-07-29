@@ -235,6 +235,21 @@ const conversionCases = [
   ['image https', '![](https://example.com/img.png)', 'example.com/img.png'],
   ['image title stripped', '![alt](https://example.com/img.png "Caption")', 'alt example.com/img.png'],
   ['HTML lowercase', '<div>x</div>', 'x'],
+  ['inline HTML comment', 'Visible <!-- internal note --> text', 'Visible text'],
+  ['HTML comment without surrounding spaces', 'a<!-- hidden -->b', 'ab'],
+  ['HTML comment with surrounding spaces', 'a <!-- hidden --> b', 'a b'],
+  ['HTML comment-only input', '<!-- hidden -->', ''],
+  ['multiline HTML comment', 'First\n\n<!-- hidden\nline -->\n\nSecond', 'First\n\nSecond'],
+  ['adjacent HTML comments', 'a<!-- one --><!-- two -->b', 'ab'],
+  ['nested opener uses first closer', 'a<!-- one <!-- two -->tail -->b', 'atail -->b'],
+  ['conditional HTML comment', 'before<!--[if IE]>legacy<![endif]-->after', 'beforeafter'],
+  ['unclosed HTML comment preserved', 'before<!-- hidden\nstill', 'before<!-- hidden\nstill'],
+  ['comment-like non-opener preserved', 'before <! -- note --> after', 'before <! -- note --> after'],
+  ['HTML comment removed inside anchor label', '<a href="url">text<!-- note --></a>', 'text url'],
+  ['encoded HTML comment remains literal', '&lt;!-- note --&gt;', '<!-- note -->'],
+  ['HTML comment in inline code remains exact', '`<!-- note -->`', '<!-- note -->'],
+  ['HTML comment in fenced code remains exact', '```\n<!-- note -->\n```', '<!-- note -->'],
+  ['HTML comment in indented code remains exact', '    <!-- note -->', '    <!-- note -->'],
   ['HTML paragraphs preserve boundaries', '<p>First</p><p>Second</p>', 'First\n\nSecond'],
   ['HTML break preserves line', 'First<br>Second', 'First\nSecond'],
   ['HTML break accepts case attributes and slash', 'First<BR class="gap" />Second', 'First\nSecond'],
@@ -268,6 +283,7 @@ const conversionCases = [
   ['HTML hexadecimal entity', 'Smile &#x1F642;', 'Smile 🙂'],
   ['invalid HTML entities remain literal', '&#0; &#xD800; &#x110000; &unknown;', '&#0; &#xD800; &#x110000; &unknown;'],
   ['decoded entities do not collide with protection tokens', '&#167;&#167;HANDSDOWN0&#167;&#167;IC0&#167;&#167;\n`secret`', '§§HANDSDOWN0§§IC0§§\nsecret'],
+  ['removed comments do not create protection-token collisions', '§§HAND<!-- hidden -->SDOWN0§§IC0§§\n`secret`', '§§HANDSDOWN0§§IC0§§\nsecret'],
   ['entities in inline code remain exact', '`Tom &amp; <br>`', 'Tom &amp; <br>'],
   ['entities in fenced code remain exact', '```\nTom &amp; <br>\n```', 'Tom &amp; <br>'],
   ['alt-heading equals', 'Title\n======', 'Title'],
@@ -390,6 +406,22 @@ test('handles repeated unclosed anchors without quadratic slowdown', { timeout: 
   const source = '<a href="https://example.com">'.repeat(20_000);
   const started = performance.now();
   mdToPlain(source);
+  assert.ok(performance.now() - started < 1000);
+});
+
+test('strips repeated HTML comments without quadratic slowdown', { timeout: 2000 }, () => {
+  const source = 'x<!-- note -->'.repeat(20_000);
+  const started = performance.now();
+  const output = mdToPlain(source);
+  assert.equal(output, 'x'.repeat(20_000));
+  assert.ok(performance.now() - started < 1000);
+});
+
+test('preserves a large unclosed HTML comment without quadratic slowdown', { timeout: 2000 }, () => {
+  const source = `${'x'.repeat(100_000)}<!--${'y'.repeat(100_000)}`;
+  const started = performance.now();
+  const output = mdToPlain(source);
+  assert.equal(output, source);
   assert.ok(performance.now() - started < 1000);
 });
 

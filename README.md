@@ -16,6 +16,7 @@ Paste Markdown directly, use the clipboard button beside **Markdown**, open a `.
 - Unordered list markers (`-`, `*`, and `+`)
 - Inline code and fenced code blocks (content preserved)
 - Recognized HTML tags (except `<a>` — href is preserved like markdown links)
+- Complete HTML comments (`<!-- ... -->`)
 - Table separator rows and outer pipes
 - Container fences (`:::`) on standalone lines
 - Alt-heading underlines (`===`)
@@ -39,6 +40,7 @@ Paste Markdown directly, use the clipboard button beside **Markdown**, open a `.
 - **Task lists** — `- [x]` / `- [ ]` not stripped.
 - **Definition lists, sub/superscript, insert/mark** — not handled (parser territory).
 - **Unknown/custom tags** — SVG, MathML, and MDX component tags pass through unchanged.
+- **Unclosed HTML comments** — passed through unchanged to avoid deleting trailing content.
 
 ## Keyboard
 

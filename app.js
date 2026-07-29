@@ -172,6 +172,24 @@ function cleanUrl(url) {
     .replace(/^www\./i, '');
 }
 
+function stripHtmlComments(text) {
+  let result = '';
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    const openingIndex = text.indexOf('<!--', cursor);
+    if (openingIndex === -1) return result + text.slice(cursor);
+
+    const closingIndex = text.indexOf('-->', openingIndex + 4);
+    if (closingIndex === -1) return result + text.slice(cursor);
+
+    result += text.slice(cursor, openingIndex);
+    cursor = closingIndex + 3;
+  }
+
+  return result;
+}
+
 const RECOGNIZED_HTML_TAGS = new Set(
   `a abbr address area article aside audio
 b base bdi bdo blockquote body br button
@@ -341,12 +359,14 @@ function stripEmphasis(text, marker, length) {
 function mdToPlain(text) {
   if (!text) return '';
 
-  const protector = createProtector(`${text}\0${decodeHtmlEntities(text)}`);
+  const commentStrippedText = stripHtmlComments(text);
+  const protector = createProtector(`${text}\0${decodeHtmlEntities(commentStrippedText)}`);
   const markdownDestination = String.raw`\(\s*([^\s)]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)`;
 
   text = protectFencedCode(text, protector);
   text = protectIndentedCode(text, protector);
   text = protectInlineCode(text, protector);
+  text = stripHtmlComments(text);
   text = text.replace(/<((?:https?:\/\/|mailto:|tel:)[^>\s]+)>/gi, '$1');
   text = text.replace(/<([a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)>/gi, '$1');
   text = text.replace(/\\([\\`*_{}[\]()#+\-.!])/g, '$1');
