@@ -407,6 +407,16 @@ async function readMarkdownFile(file) {
   }
 }
 
+async function readClipboardText(clipboard) {
+  if (typeof clipboard?.readText !== 'function') return { ok: false, reason: 'read' };
+  try {
+    const text = await clipboard.readText();
+    return text === '' ? { ok: false, reason: 'empty' } : { ok: true, text };
+  } catch {
+    return { ok: false, reason: 'read' };
+  }
+}
+
 function matchesCommandShortcut(event, key) {
   return (
     Boolean(event.ctrlKey || event.metaKey) &&
@@ -430,6 +440,7 @@ function initApp(documentRef, windowRef) {
   const inputChars = documentRef.getElementById('inputChars');
   const outputChars = documentRef.getElementById('outputChars');
   const savedEl = documentRef.getElementById('saved');
+  const pasteClipboardBtn = documentRef.getElementById('pasteClipboard');
   const openFileBtn = documentRef.getElementById('openFile');
   const fileInput = documentRef.getElementById('fileInput');
   const inputPanel = documentRef.getElementById('inputPanel');
@@ -538,6 +549,8 @@ function initApp(documentRef, windowRef) {
 
   function showFileFeedback(message) {
     clearFileFeedback();
+    scheduler.schedule(input.value);
+    scheduler.flush();
     savedEl.textContent = message;
     savedEl.classList.add('error');
     if (fileStatus) {
@@ -633,6 +646,25 @@ function initApp(documentRef, windowRef) {
     );
   }
 
+  async function pasteClipboard() {
+    const generation = ++fileLoadGeneration;
+    const result = await readClipboardText(windowRef.navigator.clipboard);
+    if (generation !== fileLoadGeneration) return;
+    if (!result.ok) {
+      showFileFeedback(result.reason === 'empty' ? 'Clipboard is empty' : 'Could not read clipboard');
+      return;
+    }
+
+    clearFileFeedback();
+    copyCoordinator.invalidate();
+    resetCopyFeedback();
+    if (copyStatus) copyStatus.textContent = '';
+    input.value = result.text;
+    input.dispatchEvent(new windowRef.Event('input', { bubbles: true }));
+    scheduler.flush();
+    input.focus();
+  }
+
   function clearAll() {
     fileLoadGeneration += 1;
     resetDragState();
@@ -652,6 +684,7 @@ function initApp(documentRef, windowRef) {
     clearFileFeedback();
     scheduler.schedule(input.value);
   });
+  pasteClipboardBtn.addEventListener('click', pasteClipboard);
   openFileBtn.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => {
     const files = Array.from(fileInput.files || []);
@@ -751,6 +784,7 @@ const api = {
   formatCount,
   isMarkdownFile,
   readMarkdownFile,
+  readClipboardText,
   matchesCommandShortcut,
   shouldCaptureInitialPaste
 };

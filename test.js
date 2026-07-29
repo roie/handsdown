@@ -9,6 +9,7 @@ const {
   formatCount,
   isMarkdownFile,
   readMarkdownFile,
+  readClipboardText,
   matchesCommandShortcut,
   shouldCaptureInitialPaste
 } = require('./app.js');
@@ -127,6 +128,28 @@ test('reports Markdown file read failures', async () => {
     }
   });
   assert.deepEqual(result, { ok: false, reason: 'read' });
+});
+
+test('reads non-empty clipboard text', async () => {
+  const result = await readClipboardText({ readText: async () => '# Pasted' });
+  assert.deepEqual(result, { ok: true, text: '# Pasted' });
+});
+
+test('reports an empty clipboard without treating it as a read failure', async () => {
+  const result = await readClipboardText({ readText: async () => '' });
+  assert.deepEqual(result, { ok: false, reason: 'empty' });
+});
+
+test('reports unavailable and rejected clipboard reads', async () => {
+  assert.deepEqual(await readClipboardText(null), { ok: false, reason: 'read' });
+  assert.deepEqual(
+    await readClipboardText({
+      readText: async () => {
+        throw new Error('denied');
+      }
+    }),
+    { ok: false, reason: 'read' }
+  );
 });
 
 const conversionCases = [
