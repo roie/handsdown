@@ -28,6 +28,8 @@ Paste Markdown directly, use the clipboard button beside **Markdown**, open a `.
 - Code content exactly as written
 - Backtick and tilde fenced code blocks, including longer outer fences
 - Indented code blocks
+- Line and paragraph boundaries from common HTML block tags and `<br>`
+- Email addresses from HTML autolinks and characters from supported HTML entities
 - Reference-style link syntax (not parsed — passed through)
 
 ## Known limitations
@@ -37,7 +39,7 @@ Paste Markdown directly, use the clipboard button beside **Markdown**, open a `.
 - **Reference-style links** — `[text][ref]` and `[ref]: url` pass through unprocessed.
 - **Task lists** — `- [x]` / `- [ ]` not stripped.
 - **Definition lists, sub/superscript, insert/mark** — not handled (parser territory).
-- **Uppercase HTML tags** (`<DIV>`) intentionally not stripped.
+- **Uppercase inline HTML tags** (`<SPAN>`) intentionally not stripped; recognized structural tags are case-insensitive.
 
 ## Keyboard
 

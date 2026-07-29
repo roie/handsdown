@@ -172,6 +172,39 @@ function cleanUrl(url) {
     .replace(/^www\./i, '');
 }
 
+function decodeHtmlEntities(text) {
+  const namedEntities = {
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: "'",
+    nbsp: ' '
+  };
+
+  return text.replace(/&(?:#([0-9]+)|#x([0-9a-f]+)|([a-z]+));/gi, (entity, decimal, hexadecimal, name) => {
+    if (name !== undefined) return namedEntities[name.toLowerCase()] ?? entity;
+
+    const codePoint = Number.parseInt(decimal ?? hexadecimal, decimal !== undefined ? 10 : 16);
+    if (codePoint === 0 || codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+      return entity;
+    }
+    return String.fromCodePoint(codePoint);
+  });
+}
+
+function preserveHtmlStructure(text) {
+  return text
+    .replace(/<br\b[^>\n]*\/?>/gi, '\n')
+    .replace(/<hr\b[^>\n]*\/?>/gi, '\n\n')
+    .replace(/<\/?(?:address|article|aside|blockquote|details|dialog|div|dl|fieldset|figcaption|figure|footer|form|h[1-6]|header|hgroup|main|nav|p|pre|section|summary)\b[^>\n]*>/gi, '\n\n')
+    .replace(/<(?:li|dt|dd|tr)\b[^>\n]*>/gi, '\n')
+    .replace(/<\/(?:li|dt|dd|tr)\s*>/gi, '')
+    .replace(/<\/?(?:ul|ol|menu|table|thead|tbody|tfoot)\b[^>\n]*>/gi, '\n')
+    .replace(/<(?:td|th)\b[^>\n]*>/gi, '')
+    .replace(/<\/(?:td|th)\s*>/gi, '\t');
+}
+
 function replaceHtmlAnchors(text) {
   const lowerText = text.toLowerCase();
   let result = '';
@@ -277,14 +310,16 @@ function stripEmphasis(text, marker, length) {
 function mdToPlain(text) {
   if (!text) return '';
 
-  const protector = createProtector(text);
+  const protector = createProtector(`${text}\0${decodeHtmlEntities(text)}`);
   const markdownDestination = String.raw`\(\s*([^\s)]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)`;
 
   text = protectFencedCode(text, protector);
   text = protectIndentedCode(text, protector);
   text = protectInlineCode(text, protector);
   text = text.replace(/<((?:https?:\/\/|mailto:|tel:)[^>\s]+)>/gi, '$1');
+  text = text.replace(/<([a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)>/gi, '$1');
   text = text.replace(/\\([\\`*_{}[\]()#+\-.!])/g, '$1');
+  text = preserveHtmlStructure(text);
   text = replaceHtmlAnchors(text);
   text = text.replace(/<\/?[a-z][^>\n]*>/g, '');
 
@@ -318,6 +353,7 @@ function mdToPlain(text) {
   text = text.replace(/(^|\s)https?:\/\//gi, '$1');
   text = text.replace(/(^|\s)mailto:/gi, '$1');
   text = text.replace(/(^|\s)tel:/gi, '$1');
+  text = decodeHtmlEntities(text);
 
   text = text
     .split('\n')
